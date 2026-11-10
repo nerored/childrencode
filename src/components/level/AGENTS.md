@@ -8,7 +8,7 @@
 | `LevelScreen.tsx` | state machine: `program`, `pythonSource`, `result/score`, `frames/frameIndex/playing`, `resultOpen`, `attempts`; resets all on `level.id` change |
 | `BlockEditor.tsx` | palette from `level.allowedCommands`, drag sessions via `data-drop-container` / `data-drag-handle` + `elementFromPoint` |
 | `commandTree.ts` | pure `getContainer`/`insertCommand`/`removeCommand`/`moveCommand`; paths alternate index + `body\|then\|else` |
-| `playback.ts` | `buildPlaybackFrames` (N+1 frames), `PLAYBACK_STEP_MS = 280`, `PLAYBACK_END_DELAY_MS = 240` |
+| `playback.ts` | `buildPlaybackFrames` (N+1 frames, `rescued` keys), `PLAYBACK_STEP_MS = 280`, `PLAYBACK_END_DELAY_MS = 240` |
 | `GridStage.tsx` | stateless render of one frame; rover position via `--agent-x/--agent-y/--agent-rotation` |
 | `ResultModal.tsx` | stars, code/steps comparison, reference answer after win or 2 attempts |
 | `level.css` | all `.level-*` / `.stage__*` styles; loaded once by `LevelScreen` |
@@ -33,7 +33,7 @@
 - The file is 1,063 lines with inline subcomponents; edit surgically instead of restyling the whole file.
 
 ## TEST FOCUS
-`commandTree.test.ts` asserts structural equality across insert/remove/move, rejects subtree drops, and checks that untouched nodes keep identity; `playback.test.ts` asserts frame count (N+1), first-visit ordering, and that the start cell never collects. Anything involving timers, pointer events or React is untested — verify by playing.
+`commandTree.test.ts` asserts structural equality across insert/remove/move, rejects subtree drops, and checks that untouched nodes keep identity; `playback.test.ts` asserts frame count (N+1), first-visit ordering, and that the start cell never rescues. Anything involving timers, pointer events or React is untested — verify by playing.
 
 ## VERIFY
 `bun test src/components/level` (commandTree + playback only). UI is untested — run `bun run dev` and play a level on both tracks.

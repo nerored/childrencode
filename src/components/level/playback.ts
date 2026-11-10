@@ -11,7 +11,7 @@ export interface StageFrame {
   position: Point;
   direction: Direction;
   visited: string[];
-  collected: string[];
+  rescued: string[];
   steps: number;
   action: string | null;
   done: boolean;
@@ -44,7 +44,7 @@ export function buildPlaybackFrames(level: LevelSpec, run: RunResult): StageFram
       position: { x: level.start.x, y: level.start.y },
       direction: level.start.direction,
       visited: [...visited],
-      collected: [],
+      rescued: [],
       steps: 0,
       action: null,
       done: run.trace.length === 0,
@@ -71,7 +71,7 @@ export function buildPlaybackFrames(level: LevelSpec, run: RunResult): StageFram
       position: { ...entry.position },
       direction: entry.direction,
       visited: [...visited],
-      collected: [...collected].sort(),
+      rescued: [...collected].sort(),
       steps: i + 1,
       action: entry.action,
       done: i + 1 === run.trace.length,

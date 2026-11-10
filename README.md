@@ -133,15 +133,11 @@ bun run build
 bun run preview
 ```
 
-## 洁净室说明
+## 原创说明
 
-ChildrenCode 是独立开源教育项目，与腾讯及其关联公司无关，也未获得其授权或背书。项目不使用、不复制、不描摹腾讯的商标、美术、音频、关卡数据、任务文案或代码。仓库内的场景、关卡、界面与文字均为本项目原创。
+仓库内的场景、关卡、界面与文字均为本项目独立设计，代码以 MIT 许可证开源。领域模型、引擎语义和内容编写规则见 [docs/architecture.md](docs/architecture.md)。
 
-This project is independent and is not affiliated with Tencent.
-
-产品形态研究的背景、来源与边界记录在 [docs/replication-report.md](docs/replication-report.md)。领域模型、引擎语义和内容编写规则见 [docs/architecture.md](docs/architecture.md)。
-
-本版本只实现图形化和 Python 两条轨道。C++ 与 AI 关卡没有实现，仅在研究报告中作为后续方向讨论。
+本版本只实现图形化和 Python 两条轨道。
 
 ## 许可证
 

@@ -9,6 +9,7 @@ interface LevelOptions {
   target?: Point;
   items?: Point[];
   obstacles?: Point[];
+  water?: Point[];
 }
 
 function makeLevel(options: LevelOptions = {}): LevelSpec {
@@ -28,7 +29,7 @@ function makeLevel(options: LevelOptions = {}): LevelSpec {
     },
     start: options.start ?? { x: 0, y: 0, direction: "east" },
     goal: {
-      kind: "collect",
+      kind: "rescued",
       items: options.items ?? [],
       target: options.target ?? { x: 4, y: 0 },
     },
@@ -37,6 +38,7 @@ function makeLevel(options: LevelOptions = {}): LevelSpec {
     parSteps: 2,
     standardAnswer: [{ kind: "forward", steps: 2 }],
     tutorial: [],
+    water: options.water,
   };
 }
 
@@ -260,5 +262,41 @@ describe("simulate", () => {
 
     expect(run.final).toEqual({ x: 0, y: 0, direction: "east" });
     expect(run.failureReason).toBe("obstacle");
+  });
+
+  test("rescues penguins and requires every penguin before the target counts", () => {
+    const level = makeLevel({
+      target: { x: 4, y: 0 },
+      items: [{ x: 1, y: 0 }, { x: 3, y: 0 }],
+    });
+
+    const partial = simulate(makeLevel({ target: { x: 4, y: 0 }, items: [{ x: 1, y: 0 }, { x: 3, y: 0 }] }), [forward(2)]);
+    expect(partial.collected).toEqual(["1,0"]);
+    expect(partial.completed).toBe(false);
+    expect(partial.failureReason).toBe("incomplete");
+
+    const rescued = simulate(
+      makeLevel({ target: { x: 2, y: 0 }, items: [{ x: 1, y: 0 }, { x: 3, y: 0 }] }),
+      [forward(3), left, left, forward(1)],
+    );
+    expect(rescued.completed).toBe(true);
+    expect(rescued.collected).toEqual(["1,0", "3,0"]);
+
+    const all = simulate(
+      makeLevel({ target: { x: 3, y: 0 }, items: [{ x: 1, y: 0 }, { x: 3, y: 0 }] }),
+      [forward(3)],
+    );
+    expect(all.completed).toBe(true);
+    expect(all.collected).toEqual(["1,0", "3,0"]);
+  });
+
+  test("water stops a step that leaves the frozen lane", () => {
+    const blocked = simulate(
+      makeLevel({ target: { x: 4, y: 4 }, water: [{ x: 0, y: 0 }, { x: 1, y: 0 }] }),
+      [forward(1), forward(1)],
+    );
+    expect(blocked.failureReason).toBe("water");
+    expect(blocked.steps).toBe(0);
+    expect(blocked.trace).toEqual([]);
   });
 });

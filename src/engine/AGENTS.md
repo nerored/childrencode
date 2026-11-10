@@ -9,13 +9,14 @@
 | `score.ts` | `codeLength = 1 + countCommands(program)`, 3-star formula |
 | `parse.ts` | line tokenizer (2-space indent, `//` comments) + `ParseError` |
 | `validate.ts` | `LEVEL_ID_PATTERN`, `MIN_GRID 5`/`MAX_GRID 8`, flood-fill reachability, standard-answer replay |
+| `water.ts` | `frozenLane` (lane column per river row) + `isWaterBlocked` (open-water cell → `water` failure) |
 
 ## SEMANTICS THAT FAIL SILENTLY IF CHANGED
 - Only `forward` (per cell entered) and `turn` spend a step; `repeat`/`if`/`setVar`/`changeVar` are free. The action cap is checked *before* the move, so the 1001st action yields `max-steps` and the rover stays put.
-- Order of forward checks: bounds (`out-of-bounds`) → obstacle (`obstacle`) → budget; the run aborts on the first failure — no partial `forward` continuation.
+- Order of forward checks: bounds (`out-of-bounds`) → obstacle (`obstacle`) → water (`water`) → budget; the run aborts on the first failure — no partial `forward` continuation.
 - `repeat.times`: floor, <1 or non-finite → 0, capped at 100. `forward.steps` likewise floors to 0, so negative steps never move backwards.
 - `if` branches: missing `else` is a no-op; `itemAhead` ignores already-collected cells; `varAtLeast` compares unset vars as 0.
-- Completion: run finished AND on `goal.target` AND all `goal.items` collected — otherwise `incomplete`. `Goal.kind` ("reach"/"collect") is display-only.
+- Completion: run finished AND on `goal.target` AND every `goal.items` penguin rescued — otherwise `incomplete`. `Goal.kind` is always `"rescued"`; `items` are penguin cells rescued by entering them, `water` rows fail a step that leaves the frozen lane with `water`.
 - Code length counts each branch of `if` and the loop body once.
 
 ## ANTI-PATTERNS

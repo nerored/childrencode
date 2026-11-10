@@ -32,16 +32,21 @@ export type Command =
 /** Discriminant values of {@link Command}. */
 export type CommandKind = Command["kind"];
 
-/** Board geometry and blocked cells for a level. */
+/** Board geometry for a level: size plus tree obstacles and corner markers. */
 export interface GridSpec {
   width: number;
   height: number;
   obstacles: Point[];
+  /** Corner markers drawn as scenery only; never block movement. */
+  corners?: Point[];
 }
 
-/** Win condition for a level. */
+/**
+ * Win condition: rescue every penguin on `items`, then reach `target`.
+ * `items` holds penguin cells; the coder rescues a penguin by entering its cell.
+ */
 export interface Goal {
-  kind: "reach" | "collect";
+  kind: "rescued";
   items: Point[];
   target: Point;
 }
@@ -70,6 +75,8 @@ export interface LevelSpec {
   parSteps: number;
   standardAnswer: Command[];
   tutorial: TutorialStep[];
+  /** Cells drawn as a frozen river that crosses the map under the ice road. */
+  water?: Point[];
 }
 
 /** A named group of levels shown as a checkpoint on the map. */
@@ -114,10 +121,11 @@ export interface WorldSpec {
 /** Outcome of executing a program against a level. */
 export interface RunResult {
   completed: boolean;
+  /** Penguin cells rescued so far, sorted `"x,y"` keys. */
   collected: string[];
   steps: number;
   trace: Array<{ action: string; position: Point; direction: Direction }>;
-  failureReason?: "out-of-bounds" | "obstacle" | "max-steps" | "incomplete";
+  failureReason?: "out-of-bounds" | "obstacle" | "max-steps" | "incomplete" | "water";
   final: Point & { direction: Direction };
   vars: Record<string, number>;
 }

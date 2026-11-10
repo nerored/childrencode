@@ -92,26 +92,24 @@ const levels: LevelSpec[] = [
     checkpointId: "s03-c01-k01",
     index: 1,
     title: "齿轮初装",
-    brief: "在装配线起点为零件计数写入初值，然后沿传送带向东走过四格，途中拾取中段的齿轮并抵达终点。",
+    brief: "在装配线起点为企鹅计数写入初值，然后沿传送带向东走过四格，途中救出中段的齿轮并抵达救援基地。",
     hint: "先用 setVar 写初值，再走直线。",
-    grid: { width: 5, height: 5, obstacles: [
-      { x: 1, y: 1 },
-      { x: 3, y: 3 },
-    ] },
+    grid: { width: 5, height: 5, obstacles: [{ x: 1, y: 1 }, { x: 3, y: 3 }], corners: [] },
     start: { x: 0, y: 4, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 2, y: 4 }], target: { x: 4, y: 4 } },
+    goal: { kind: "rescued", items: [{ x: 2, y: 4 }], target: { x: 4, y: 4 } },
     allowedCommands: ["setVar", "forward"],
     parCode: 3,
     parSteps: 4,
     standardAnswer: [
-      { kind: "setVar", name: "零件", value: 1 },
+      { kind: "setVar", name: "企鹅", value: 1 },
       { kind: "forward", steps: 4 },
     ],
     tutorial: [
       { text: "变量像工位上的记录牌，先给它一个初值。", highlight: "palette" },
       { text: "把 setVar 拖进程序，再让角色沿传送带前进。", highlight: "grid" },
-      { text: "点击运行，确认零件被收集并停在终点。", highlight: "run" },
+      { text: "点击运行，确认企鹅被救出并停在救援基地。", highlight: "run" },
     ],
+    water: [{ x: 0, y: 0 }, { x: 1, y: 4 }]
   },
   {
     id: "s03-c01-k01-l02",
@@ -122,12 +120,9 @@ const levels: LevelSpec[] = [
     title: "双料登记",
     brief: "两箱物料分别登记数量，确认初值后沿装配台向东三格，再转向南两格，把沿途螺栓与终点垫片收入记录。",
     hint: "两个变量分别赋值，转弯后沿竖道前进。",
-    grid: { width: 6, height: 5, obstacles: [
-      { x: 2, y: 4 },
-      { x: 0, y: 3 },
-    ] },
+    grid: { width: 6, height: 5, obstacles: [{ x: 2, y: 4 }, { x: 0, y: 3 }], corners: [] },
     start: { x: 0, y: 0, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 1, y: 0 }, { x: 3, y: 2 }], target: { x: 3, y: 2 } },
+    goal: { kind: "rescued", items: [{ x: 1, y: 0 }, { x: 3, y: 2 }], target: { x: 3, y: 2 } },
     allowedCommands: ["setVar", "forward", "turn"],
     parCode: 6,
     parSteps: 6,
@@ -139,6 +134,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 2 },
     ],
     tutorial: [],
+    water: [{ x: 2, y: 0 }, { x: 0, y: 2 }]
   },
   {
     id: "s03-c01-k02-l01",
@@ -147,14 +143,11 @@ const levels: LevelSpec[] = [
     checkpointId: "s03-c01-k02",
     index: 1,
     title: "计数起步",
-    brief: "把计数从零开始，用两次累加记录三枚齿轮，再沿西向滑轨走四格，经过中段标记后停在终点。",
+    brief: "把计数从零开始，用两次累加记录三枚齿轮，再沿西向滑轨走四格，经过中段标记后停在救援基地。",
     hint: "changeVar 让计数从零开始累加。",
-    grid: { width: 5, height: 5, obstacles: [
-      { x: 1, y: 3 },
-      { x: 3, y: 1 },
-    ] },
+    grid: { width: 5, height: 5, obstacles: [{ x: 1, y: 3 }, { x: 3, y: 1 }], corners: [] },
     start: { x: 4, y: 4, direction: "west" },
-    goal: { kind: "collect", items: [{ x: 2, y: 4 }], target: { x: 0, y: 4 } },
+    goal: { kind: "rescued", items: [{ x: 2, y: 4 }], target: { x: 0, y: 4 } },
     allowedCommands: ["setVar", "changeVar", "forward"],
     parCode: 5,
     parSteps: 4,
@@ -165,6 +158,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 4 },
     ],
     tutorial: [],
+    water: [{ x: 0, y: 0 }, { x: 1, y: 4 }]
   },
   {
     id: "s03-c01-k02-l02",
@@ -175,13 +169,9 @@ const levels: LevelSpec[] = [
     title: "累加传送",
     brief: "循环三次，每前进一格就把计数加一；完成三格后左转北上两格，在装配位收齐齿轮并停下。",
     hint: "在 repeat 里同时累加计数和前进。",
-    grid: { width: 6, height: 6, obstacles: [
-      { x: 1, y: 4 },
-      { x: 4, y: 5 },
-      { x: 5, y: 1 },
-    ] },
+    grid: { width: 6, height: 6, obstacles: [{ x: 1, y: 4 }, { x: 4, y: 5 }, { x: 5, y: 1 }], corners: [] },
     start: { x: 0, y: 5, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 2, y: 5 }], target: { x: 3, y: 3 } },
+    goal: { kind: "rescued", items: [{ x: 2, y: 5 }], target: { x: 3, y: 3 } },
     allowedCommands: ["setVar", "changeVar", "repeat", "forward", "turn"],
     parCode: 7,
     parSteps: 6,
@@ -195,6 +185,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 2 },
     ],
     tutorial: [],
+    water: [{ x: 3, y: 4 }, { x: 1, y: 5 }]
   },
   {
     id: "s03-c01-k03-l01",
@@ -205,12 +196,9 @@ const levels: LevelSpec[] = [
     title: "记录触发",
     brief: "先写入一条记录，条件成立时立即右转，绕过传送带上的障碍，再向东三格、左转一格抵达工位。",
     hint: "条件成立才执行括号里的转向。",
-    grid: { width: 5, height: 5, obstacles: [
-      { x: 2, y: 0 },
-      { x: 4, y: 2 },
-    ] },
+    grid: { width: 5, height: 5, obstacles: [{ x: 2, y: 0 }, { x: 4, y: 2 }], corners: [] },
     start: { x: 0, y: 0, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 4, y: 1 }], target: { x: 4, y: 0 } },
+    goal: { kind: "rescued", items: [{ x: 4, y: 1 }], target: { x: 4, y: 0 } },
     allowedCommands: ["setVar", "if", "forward", "turn"],
     parCode: 10,
     parSteps: 9,
@@ -231,6 +219,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 1 },
     ],
     tutorial: [],
+    water: [{ x: 0, y: 2 }, { x: 0, y: 3 }]
   },
   {
     id: "s03-c01-k03-l02",
@@ -239,14 +228,11 @@ const levels: LevelSpec[] = [
     checkpointId: "s03-c01-k03",
     index: 2,
     title: "零位判断",
-    brief: "计数保持为零，条件不成立就跳过前进；从障碍旁右转南下，捡起侧位零件后左转向东两格。",
+    brief: "计数保持为零，条件不成立就跳过前进；从障碍旁右转南下，救出侧位企鹅后左转向东两格。",
     hint: "条件不成立时跳过前进，改走转弯。",
-    grid: { width: 5, height: 5, obstacles: [
-      { x: 1, y: 0 },
-      { x: 3, y: 2 },
-    ] },
+    grid: { width: 5, height: 5, obstacles: [{ x: 1, y: 0 }, { x: 3, y: 2 }], corners: [] },
     start: { x: 0, y: 0, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 0, y: 1 }], target: { x: 2, y: 1 } },
+    goal: { kind: "rescued", items: [{ x: 0, y: 1 }], target: { x: 2, y: 1 } },
     allowedCommands: ["setVar", "if", "forward", "turn"],
     parCode: 8,
     parSteps: 5,
@@ -265,6 +251,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 2 },
     ],
     tutorial: [],
+    water: [{ x: 1, y: 1 }, { x: 0, y: 2 }]
   },
   {
     id: "s03-c01-k04-l01",
@@ -273,14 +260,11 @@ const levels: LevelSpec[] = [
     checkpointId: "s03-c01-k04",
     index: 1,
     title: "装配核对",
-    brief: "先把记录归零再累加两次，达到阈值后连续前进两格，随后绕开挡板，沿上缘与右缘走到装配终点。",
+    brief: "先把记录归零再累加两次，达到阈值后连续前进两格，随后绕开挡板，沿上缘与右缘走到装配线尽头的救援基地。",
     hint: "先累加，再用 varAtLeast 触发前进。",
-    grid: { width: 6, height: 6, obstacles: [
-      { x: 3, y: 5 },
-      { x: 4, y: 1 },
-    ] },
+    grid: { width: 6, height: 6, obstacles: [{ x: 3, y: 5 }, { x: 4, y: 1 }], corners: [] },
     start: { x: 0, y: 5, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 1, y: 5 }], target: { x: 5, y: 5 } },
+    goal: { kind: "rescued", items: [{ x: 1, y: 5 }], target: { x: 5, y: 5 } },
     allowedCommands: ["setVar", "changeVar", "if", "forward", "turn"],
     parCode: 12,
     parSteps: 10,
@@ -303,6 +287,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 1 },
     ],
     tutorial: [],
+    water: [{ x: 0, y: 0 }, { x: 2, y: 5 }]
   },
   {
     id: "s03-c01-k04-l02",
@@ -311,15 +296,11 @@ const levels: LevelSpec[] = [
     checkpointId: "s03-c01-k04",
     index: 2,
     title: "复检记录",
-    brief: "写入装配初值并累加一次，条件达成后右转向南四格，收下纵列零件，再左转东行三格，最后右转一格到目标位。",
+    brief: "写入装配初值并累加一次，条件达成后右转向南四格，收下纵列企鹅，再左转东行三格，最后右转一格到目标位。",
     hint: "变量阈值可以控制转折的时机。",
-    grid: { width: 6, height: 6, obstacles: [
-      { x: 1, y: 0 },
-      { x: 2, y: 3 },
-      { x: 4, y: 2 },
-    ] },
+    grid: { width: 6, height: 6, obstacles: [{ x: 1, y: 0 }, { x: 2, y: 3 }, { x: 4, y: 2 }], corners: [] },
     start: { x: 0, y: 0, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 0, y: 2 }, { x: 3, y: 4 }], target: { x: 3, y: 5 } },
+    goal: { kind: "rescued", items: [{ x: 0, y: 2 }, { x: 3, y: 4 }], target: { x: 3, y: 5 } },
     allowedCommands: ["setVar", "changeVar", "if", "forward", "turn"],
     parCode: 10,
     parSteps: 11,
@@ -340,6 +321,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 1 },
     ],
     tutorial: [],
+    water: [{ x: 0, y: 1 }, { x: 0, y: 3 }]
   },
   {
     id: "s03-c02-k01-l01",
@@ -350,12 +332,9 @@ const levels: LevelSpec[] = [
     title: "前路探测",
     brief: "在直道上重复探测前方，只要通路就前进一步，连续三次穿过工位，顺手带走中段的齿轮。",
     hint: "repeat 里放 if pathAhead，可以边走边探测。",
-    grid: { width: 5, height: 5, obstacles: [
-      { x: 4, y: 0 },
-      { x: 2, y: 2 },
-    ] },
+    grid: { width: 5, height: 5, obstacles: [{ x: 4, y: 0 }, { x: 2, y: 2 }], corners: [] },
     start: { x: 0, y: 0, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 1, y: 0 }], target: { x: 3, y: 0 } },
+    goal: { kind: "rescued", items: [{ x: 1, y: 0 }], target: { x: 3, y: 0 } },
     allowedCommands: ["repeat", "if", "forward"],
     parCode: 4,
     parSteps: 3,
@@ -375,6 +354,7 @@ const levels: LevelSpec[] = [
       { text: "把 if pathAhead 放进 repeat，就能边走边探测。", highlight: "grid" },
       { text: "运行程序，看看三次探测是否都走出了正确的一步。", highlight: "run" },
     ],
+    water: [{ x: 2, y: 0 }, { x: 0, y: 1 }]
   },
   {
     id: "s03-c02-k01-l02",
@@ -383,14 +363,11 @@ const levels: LevelSpec[] = [
     checkpointId: "s03-c02-k01",
     index: 2,
     title: "转角试探",
-    brief: "先确认前方可走再前进一格，拾起传送带上的零件，随后连续两次左转，沿内圈走到左上工位。",
+    brief: "先确认前方可走再前进一格，拾起传送带上的企鹅，随后连续两次左转，沿内圈走到左上工位。",
     hint: "先探测再前进，转弯后继续观察。",
-    grid: { width: 5, height: 5, obstacles: [
-      { x: 2, y: 4 },
-      { x: 0, y: 0 },
-    ] },
+    grid: { width: 5, height: 5, obstacles: [{ x: 2, y: 4 }, { x: 0, y: 0 }], corners: [] },
     start: { x: 0, y: 4, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 1, y: 4 }], target: { x: 0, y: 2 } },
+    goal: { kind: "rescued", items: [{ x: 1, y: 4 }], target: { x: 0, y: 2 } },
     allowedCommands: ["if", "forward", "turn"],
     parCode: 7,
     parSteps: 6,
@@ -408,6 +385,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 1 },
     ],
     tutorial: [],
+    water: [{ x: 1, y: 3 }, { x: 3, y: 4 }]
   },
   {
     id: "s03-c02-k02-l01",
@@ -416,14 +394,11 @@ const levels: LevelSpec[] = [
     checkpointId: "s03-c02-k02",
     index: 1,
     title: "双向分岔",
-    brief: "前方被挡板封住时不要硬闯，改走右转支路，向南两格穿过侧道，捡起零件后停在下方记录点。",
+    brief: "前方被挡板封住时不要硬闯，改走右转支路，向南两格穿过侧道，救出企鹅后停在下方记录点。",
     hint: "if 有 else 时，受阻就走另一条路。",
-    grid: { width: 5, height: 5, obstacles: [
-      { x: 1, y: 0 },
-      { x: 3, y: 2 },
-    ] },
+    grid: { width: 5, height: 5, obstacles: [{ x: 1, y: 0 }, { x: 3, y: 2 }], corners: [] },
     start: { x: 0, y: 0, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 0, y: 1 }], target: { x: 0, y: 2 } },
+    goal: { kind: "rescued", items: [{ x: 0, y: 1 }], target: { x: 0, y: 2 } },
     allowedCommands: ["if", "forward", "turn"],
     parCode: 5,
     parSteps: 3,
@@ -441,6 +416,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 2 },
     ],
     tutorial: [],
+    water: [{ x: 0, y: 3 }, { x: 0, y: 4 }]
   },
   {
     id: "s03-c02-k02-l02",
@@ -449,14 +425,11 @@ const levels: LevelSpec[] = [
     checkpointId: "s03-c02-k02",
     index: 2,
     title: "计数双道",
-    brief: "先写入计数一，判断阈值未到便左转向南；沿纵道走两格，收集侧位零件后停在下方工位。",
+    brief: "先写入计数一，判断阈值未到便左转向南；沿纵道走两格，救出侧位企鹅后停在下方工位。",
     hint: "阈值不够时用 else 转向。",
-    grid: { width: 5, height: 5, obstacles: [
-      { x: 3, y: 0 },
-      { x: 1, y: 3 },
-    ] },
+    grid: { width: 5, height: 5, obstacles: [{ x: 3, y: 0 }, { x: 1, y: 3 }], corners: [] },
     start: { x: 4, y: 0, direction: "west" },
-    goal: { kind: "collect", items: [{ x: 4, y: 1 }], target: { x: 4, y: 2 } },
+    goal: { kind: "rescued", items: [{ x: 4, y: 1 }], target: { x: 4, y: 2 } },
     allowedCommands: ["setVar", "if", "forward", "turn"],
     parCode: 6,
     parSteps: 3,
@@ -475,6 +448,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 2 },
     ],
     tutorial: [],
+    water: [{ x: 0, y: 3 }, { x: 0, y: 4 }]
   },
   {
     id: "s03-c02-k03-l01",
@@ -485,12 +459,9 @@ const levels: LevelSpec[] = [
     title: "双重校验",
     brief: "写入计数二并立刻判断，成立时右转向南两格取件；随后再探测前方，确认通畅后继续南下两格。",
     hint: "把变量判断和通路判断按顺序组合。",
-    grid: { width: 6, height: 6, obstacles: [
-      { x: 2, y: 0 },
-      { x: 1, y: 4 },
-    ] },
+    grid: { width: 6, height: 6, obstacles: [{ x: 2, y: 0 }, { x: 1, y: 4 }], corners: [] },
     start: { x: 0, y: 0, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 0, y: 2 }], target: { x: 0, y: 4 } },
+    goal: { kind: "rescued", items: [{ x: 0, y: 2 }], target: { x: 0, y: 4 } },
     allowedCommands: ["setVar", "if", "forward", "turn"],
     parCode: 7,
     parSteps: 5,
@@ -513,6 +484,7 @@ const levels: LevelSpec[] = [
       },
     ],
     tutorial: [],
+    water: [{ x: 0, y: 1 }, { x: 0, y: 3 }]
   },
   {
     id: "s03-c02-k03-l02",
@@ -521,14 +493,11 @@ const levels: LevelSpec[] = [
     checkpointId: "s03-c02-k03",
     index: 2,
     title: "双闸联动",
-    brief: "前方被堵时左转北上三格，取走纵向零件，再依据计数阈值右转东行三格，把终点标记一并收下。",
+    brief: "前方被堵时左转北上三格，取走纵向企鹅，再依据计数阈值右转东行三格，把救援基地一并收下。",
     hint: "两个条件分别控制一次转向。",
-    grid: { width: 6, height: 6, obstacles: [
-      { x: 1, y: 5 },
-      { x: 3, y: 0 },
-    ] },
+    grid: { width: 6, height: 6, obstacles: [{ x: 1, y: 5 }, { x: 3, y: 0 }], corners: [] },
     start: { x: 0, y: 5, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 0, y: 2 }, { x: 2, y: 2 }], target: { x: 3, y: 2 } },
+    goal: { kind: "rescued", items: [{ x: 0, y: 2 }, { x: 2, y: 2 }], target: { x: 3, y: 2 } },
     allowedCommands: ["setVar", "if", "forward", "turn"],
     parCode: 9,
     parSteps: 8,
@@ -555,6 +524,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 3 },
     ],
     tutorial: [],
+    water: [{ x: 1, y: 2 }, { x: 0, y: 3 }]
   },
   {
     id: "s03-c02-k04-l01",
@@ -563,14 +533,11 @@ const levels: LevelSpec[] = [
     checkpointId: "s03-c02-k04",
     index: 1,
     title: "工坊调度",
-    brief: "累计调度计数后前进一格，探测到挡板便右转南下四格；收起纵列零件，再左转沿底缘东行三格。",
+    brief: "累计调度计数后前进一格，探测到挡板便右转南下四格；收起纵列企鹅，再左转沿底缘东行三格。",
     hint: "变量、通路和 else 可以一起使用。",
-    grid: { width: 6, height: 6, obstacles: [
-      { x: 2, y: 0 },
-      { x: 4, y: 3 },
-    ] },
+    grid: { width: 6, height: 6, obstacles: [{ x: 2, y: 0 }, { x: 4, y: 3 }], corners: [] },
     start: { x: 0, y: 0, direction: "east" },
-    goal: { kind: "collect", items: [{ x: 1, y: 0 }, { x: 1, y: 4 }], target: { x: 4, y: 4 } },
+    goal: { kind: "rescued", items: [{ x: 1, y: 0 }, { x: 1, y: 4 }], target: { x: 4, y: 4 } },
     allowedCommands: ["setVar", "changeVar", "if", "forward", "turn"],
     parCode: 11,
     parSteps: 10,
@@ -599,6 +566,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 3 },
     ],
     tutorial: [],
+    water: [{ x: 3, y: 0 }, { x: 0, y: 4 }]
   },
   {
     id: "s03-c02-k04-l02",
@@ -607,15 +575,11 @@ const levels: LevelSpec[] = [
     checkpointId: "s03-c02-k04",
     index: 2,
     title: "全速排程",
-    brief: "把调度计数累加到二，先北行两格取件；前方受阻时左转西行三格，再依次转向北方与西侧，收齐零件抵达终点。",
+    brief: "把调度计数累加到二，先北行两格取件；前方受阻时左转西行三格，再依次转向北方与西侧，救出沿途全部企鹅后停到救援基地。",
     hint: "先累加调度数，再让条件决定路线。",
-    grid: { width: 7, height: 7, obstacles: [
-      { x: 6, y: 3 },
-      { x: 5, y: 1 },
-      { x: 1, y: 2 },
-    ] },
+    grid: { width: 7, height: 7, obstacles: [{ x: 6, y: 3 }, { x: 5, y: 1 }, { x: 1, y: 2 }], corners: [] },
     start: { x: 6, y: 6, direction: "north" },
-    goal: { kind: "collect", items: [{ x: 6, y: 4 }, { x: 3, y: 1 }], target: { x: 0, y: 0 } },
+    goal: { kind: "rescued", items: [{ x: 6, y: 4 }, { x: 3, y: 1 }], target: { x: 0, y: 0 } },
     allowedCommands: ["setVar", "changeVar", "if", "forward", "turn"],
     parCode: 15,
     parSteps: 16,
@@ -648,6 +612,7 @@ const levels: LevelSpec[] = [
       { kind: "forward", steps: 1 },
     ],
     tutorial: [],
+    water: [{ x: 3, y: 2 }, { x: 3, y: 3 }]
   },
 ];
 

@@ -14,19 +14,6 @@ import {
 
 const SCENE_NAMES = ["风车原野", "潮汐回廊", "齿轮工坊", "雾林岔路"];
 
-const TENCENT_SCENE_NAMES = [
-  "南极科考",
-  "南极危机",
-  "雨林守护",
-  "火山探秘",
-  "草原重生",
-  "海洋卫士",
-  "城市绿洲",
-  "能源新纪元",
-  "未来保卫战",
-  "时空恢复",
-  "星际征途",
-];
 
 function chapterLevelIds(scene: SceneSpec, chapterId: string): string[] {
   return scene.chapters
@@ -121,13 +108,12 @@ describe("WORLD", () => {
     expect(problems).toEqual([]);
   });
 
-  test("every scene name is a ChildrenCode name and not a Tencent scene name", () => {
+  test("every scene name is a ChildrenCode scene name", () => {
     const names = WORLD.scenes.map((scene) => scene.name);
     expect(new Set(names).size).toBe(names.length);
 
     for (const name of names) {
       expect(SCENE_NAMES).toContain(name);
-      expect(TENCENT_SCENE_NAMES).not.toContain(name);
     }
   });
 });

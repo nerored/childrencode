@@ -21,7 +21,7 @@ function makeLevel(overrides: Partial<LevelSpec> = {}): LevelSpec {
     grid: { width: 5, height: 5, obstacles: [] },
     start: { x: 0, y: 0, direction: "east" },
     goal: {
-      kind: "collect",
+      kind: "rescued",
       items: [{ x: 1, y: 0 }],
       target: { x: 2, y: 0 },
     },
@@ -115,7 +115,7 @@ describe("validateLevel", () => {
     const errors = validateLevel(
       makeLevel({
         grid: { width: 5, height: 5, obstacles: [{ x: 7, y: 0 }] },
-        goal: { kind: "collect", items: [{ x: 5, y: 0 }], target: { x: 2, y: 0 } },
+        goal: { kind: "rescued", items: [{ x: 5, y: 0 }], target: { x: 2, y: 0 } },
       }),
     );
     expect(errors.some((error) => error.includes("item 5,0 must be inside the grid"))).toBe(true);
@@ -160,10 +160,10 @@ describe("validateLevel", () => {
             { x: 1, y: 4 },
           ],
         },
-        goal: { kind: "collect", items: [{ x: 4, y: 4 }], target: { x: 4, y: 4 } },
+        goal: { kind: "rescued", items: [{ x: 4, y: 4 }], target: { x: 4, y: 4 } },
       }),
     );
-    expect(errors.some((error) => error.includes("item 4,4 is not reachable"))).toBe(true);
+    expect(errors.some((error) => error.includes("penguin 4,4 is not reachable"))).toBe(true);
   });
 });
 
