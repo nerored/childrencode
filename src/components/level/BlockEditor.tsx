@@ -1,6 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { countCommands } from "../../domain/commands";
 import type { Command, CommandKind, Condition, LevelSpec } from "../../domain/types";
+import {
+  insertCommand,
+  isDescendantContainer,
+  moveCommand,
+  removeCommand,
+} from "./commandTree";
+import type { BlockAddress, ContainerPath } from "./commandTree";
 
 export interface BlockEditorProps {
   level: LevelSpec;
@@ -50,6 +58,110 @@ function describeCommand(command: Command): string {
     case "changeVar":
       return `变量 ${command.name} 增加 ${command.delta}`;
   }
+}
+
+/**
+ * Pointer Events only: pointerdown on a drag handle or palette chip opens a
+ * session, pointermove drives the ghost and hit-tests slots, pointerup commits
+ * the move, and pointercancel aborts it. Click/keyboard editing stays intact.
+ */
+type DragSource =
+  | { kind: "block"; address: BlockAddress; command: Command }
+  | { kind: "palette"; command: Command };
+
+interface DragState {
+  x: number;
+  y: number;
+  source: DragSource;
+  activeKey: string | null;
+}
+
+interface PointerSession {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  captureEl: HTMLElement;
+  source: DragSource;
+  active: boolean;
+}
+
+interface ActiveDrop {
+  container: ContainerPath;
+  index: number;
+}
+
+interface DragApi {
+  activeKey: string | null;
+  draggingKey: string | null;
+  startBlock(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    address: BlockAddress,
+    command: Command,
+  ): void;
+  startPalette(event: ReactPointerEvent<HTMLButtonElement>, entry: PaletteEntry): void;
+  move(event: ReactPointerEvent<HTMLButtonElement>): void;
+  end(event: ReactPointerEvent<HTMLButtonElement>): void;
+  cancel(event: ReactPointerEvent<HTMLButtonElement>): void;
+  consumeSuppressedClick(): boolean;
+}
+
+function addressKey(address: BlockAddress): string {
+  return JSON.stringify([address.container, address.index]);
+}
+
+function slotKey(container: ContainerPath, index: number): string {
+  return JSON.stringify([container, index]);
+}
+
+function sameContainerPath(a: ContainerPath, b: ContainerPath): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  return a.every((segment, index) => segment === b[index]);
+}
+
+function parseDropSlot(element: Element): ActiveDrop | null {
+  const slot = element.closest<HTMLElement>("[data-drop-container]");
+  if (slot === null) {
+    return null;
+  }
+
+  const containerText = slot.dataset.dropContainer;
+  const indexText = slot.dataset.dropIndex;
+  if (containerText === undefined || indexText === undefined) {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(containerText);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) {
+    return null;
+  }
+
+  const container: ContainerPath = [];
+  for (const segment of parsed) {
+    if (segment === "body" || segment === "then" || segment === "else") {
+      container.push(segment);
+    } else if (typeof segment === "number" && Number.isInteger(segment) && segment >= 0) {
+      container.push(segment);
+    } else {
+      return null;
+    }
+  }
+  if (container.length % 2 !== 0) {
+    return null;
+  }
+
+  const index = Number(indexText);
+  if (!Number.isInteger(index) || index < 0) {
+    return null;
+  }
+
+  return { container, index };
 }
 
 function paletteFor(allowed: Set<CommandKind>): PaletteEntry[] {
@@ -117,16 +229,6 @@ function paletteFor(allowed: Set<CommandKind>): PaletteEntry[] {
 
 function replaceAt<T>(list: T[], index: number, value: T): T[] {
   return list.map((item, current) => (current === index ? value : item));
-}
-
-function moveItem<T>(list: T[], from: number, to: number): T[] {
-  if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) {
-    return list;
-  }
-  const next = [...list];
-  const [item] = next.splice(from, 1);
-  next.splice(to, 0, item);
-  return next;
 }
 
 function withElseBranch(command: Extract<Command, { kind: "if" }>, next: Command[]): Command {
@@ -223,10 +325,11 @@ function NameField({ label, value, onChange }: NameFieldProps) {
 interface PaletteProps {
   entries: PaletteEntry[];
   onAdd(entry: PaletteEntry): void;
+  drag: DragApi;
   compact?: boolean;
 }
 
-function Palette({ entries, onAdd, compact = false }: PaletteProps) {
+function Palette({ entries, onAdd, drag, compact = false }: PaletteProps) {
   if (entries.length === 0) {
     return null;
   }
@@ -240,8 +343,18 @@ function Palette({ entries, onAdd, compact = false }: PaletteProps) {
             key={entry.key}
             type="button"
             className="block-palette__chip"
-            onClick={() => onAdd(entry)}
-            aria-label={`添加指令：${entry.label}`}
+            draggable={false}
+            onDragStart={(event) => event.preventDefault()}
+            onPointerDown={(event) => drag.startPalette(event, entry)}
+            onPointerMove={drag.move}
+            onPointerUp={drag.end}
+            onPointerCancel={drag.cancel}
+            onClick={() => {
+              if (!drag.consumeSuppressedClick()) {
+                onAdd(entry);
+              }
+            }}
+            aria-label={`添加指令：${entry.label}。也可以拖到目标空位插入。`}
           >
             <span className="block-palette__glyph" aria-hidden="true">
               {entry.glyph}
@@ -401,6 +514,25 @@ function CommandFields({ command, onChange }: CommandFieldsProps) {
   }
 }
 
+interface DropSlotProps {
+  container: ContainerPath;
+  index: number;
+  activeKey: string | null;
+}
+
+/** A real list item that accepts a drop; it is never display:none. */
+function DropSlot({ container, index, activeKey }: DropSlotProps) {
+  const isActive = activeKey === slotKey(container, index);
+  return (
+    <li
+      className={`drop-slot${isActive ? " drop-slot--active" : ""}`}
+      data-drop-container={JSON.stringify(container)}
+      data-drop-index={index}
+      aria-hidden="true"
+    />
+  );
+}
+
 interface BlockListProps {
   commands: Command[];
   onChange(commands: Command[]): void;
@@ -408,7 +540,11 @@ interface BlockListProps {
   palette: PaletteEntry[];
   label: string;
   depth: number;
+  container: ContainerPath;
+  drag: DragApi;
   showPalette?: boolean;
+  onRemove(address: BlockAddress): void;
+  onMoveToSlot(from: BlockAddress, toIndex: number): void;
 }
 
 function BlockList({
@@ -418,73 +554,128 @@ function BlockList({
   palette,
   label,
   depth,
+  container,
+  drag,
   showPalette = true,
+  onRemove,
+  onMoveToSlot,
 }: BlockListProps) {
   const add = (entry: PaletteEntry) => onChange([...commands, entry.create()]);
 
   return (
     <div className="block-list-wrap">
-      {commands.length === 0 ? (
+      <ol
+        className="block-list"
+        data-block-container={JSON.stringify(container)}
+        aria-label={label}
+      >
+        {commands.map((command, index) => {
+          const address: BlockAddress = { container, index };
+          return (
+            <Fragment key={`${command.kind}-${index}`}>
+              <DropSlot
+                container={container}
+                index={index}
+                activeKey={drag.activeKey}
+              />
+              <li className="block-list__item" data-block-index={index}>
+                <BlockCard
+                  command={command}
+                  address={address}
+                  allowed={allowed}
+                  palette={palette}
+                  drag={drag}
+                  depth={depth}
+                  label={`${describeCommand(command)}（第 ${index + 1} 条）`}
+                  dragging={drag.draggingKey === addressKey(address)}
+                  onChange={(next) => onChange(replaceAt(commands, index, next))}
+                  onRemove={() => onRemove(address)}
+                  onMoveToSlot={onMoveToSlot}
+                  onMoveUp={
+                    index > 0
+                      ? () => onMoveToSlot(address, index - 1)
+                      : undefined
+                  }
+                  onMoveDown={
+                    index < commands.length - 1
+                      ? () => onMoveToSlot(address, index + 2)
+                      : undefined
+                  }
+                />
+              </li>
+            </Fragment>
+          );
+        })}
+        <DropSlot container={container} index={commands.length} activeKey={drag.activeKey} />
+      </ol>
+
+      {commands.length === 0 && (
         <p className="block-list__empty">
           还没有指令{showPalette ? "，从下方添加一条" : "，从上方选择指令添加"}。
         </p>
-      ) : (
-        <ol className="block-list" aria-label={label}>
-          {commands.map((command, index) => (
-            <li key={`${command.kind}-${index}`} className="block-list__item">
-              <BlockCard
-                command={command}
-                allowed={allowed}
-                palette={palette}
-                depth={depth}
-                label={`${describeCommand(command)}（第 ${index + 1} 条）`}
-                onChange={(next) => onChange(replaceAt(commands, index, next))}
-                onRemove={() => onChange(commands.filter((_, current) => current !== index))}
-                onMoveUp={
-                  index > 0 ? () => onChange(moveItem(commands, index, index - 1)) : undefined
-                }
-                onMoveDown={
-                  index < commands.length - 1
-                    ? () => onChange(moveItem(commands, index, index + 1))
-                    : undefined
-                }
-              />
-            </li>
-          ))}
-        </ol>
       )}
 
-      {showPalette && <Palette entries={palette} onAdd={add} compact />}
+      {showPalette && <Palette entries={palette} onAdd={add} drag={drag} compact />}
     </div>
   );
 }
 
 interface BlockCardProps {
   command: Command;
+  address: BlockAddress;
   allowed: Set<CommandKind>;
   palette: PaletteEntry[];
+  drag: DragApi;
   depth: number;
   label: string;
+  dragging: boolean;
   onChange(command: Command): void;
   onRemove(): void;
+  onMoveToSlot(from: BlockAddress, toIndex: number): void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
 }
 
 function BlockCard({
   command,
+  address,
   allowed,
   palette,
+  drag,
   depth,
   label,
+  dragging,
   onChange,
   onRemove,
+  onMoveToSlot,
   onMoveUp,
   onMoveDown,
 }: BlockCardProps) {
+  const bodyContainer: ContainerPath = [...address.container, address.index, "body"];
+  const thenContainer: ContainerPath = [...address.container, address.index, "then"];
+  const elseContainer: ContainerPath = [...address.container, address.index, "else"];
+
   return (
-    <article className={`block block--${command.kind}`} aria-label={label}>
+    <article
+      className={`block block--${command.kind}${dragging ? " block--dragging" : ""}`}
+      aria-label={label}
+    >
       <div className="block__head">
+        <button
+          type="button"
+          className="block__drag-handle"
+          data-drag-handle=""
+          draggable={false}
+          style={{ touchAction: "none" }}
+          onDragStart={(event) => event.preventDefault()}
+          onPointerDown={(event) => drag.startBlock(event, address, command)}
+          onPointerMove={drag.move}
+          onPointerUp={drag.end}
+          onPointerCancel={drag.cancel}
+          aria-label={`拖动：${label}；也可用上移、下移按钮调整`}
+        >
+          <span aria-hidden="true">⠿</span>
+        </button>
         <span className="block__kind" aria-hidden="true">
           {KIND_GLYPH[command.kind]}
         </span>
@@ -529,8 +720,12 @@ function BlockCard({
             onChange={(body) => onChange({ ...command, body })}
             allowed={allowed}
             palette={palette}
+            drag={drag}
             label="重复体内的指令"
             depth={depth + 1}
+            container={bodyContainer}
+            onRemove={onRemove}
+            onMoveToSlot={onMoveToSlot}
           />
         </div>
       )}
@@ -544,8 +739,12 @@ function BlockCard({
               onChange={(then) => onChange({ ...command, then })}
               allowed={allowed}
               palette={palette}
+              drag={drag}
               label="条件成立时执行的指令"
               depth={depth + 1}
+              container={thenContainer}
+              onRemove={onRemove}
+              onMoveToSlot={onMoveToSlot}
             />
           </div>
           <div className="block__branch block__branch--else">
@@ -555,8 +754,12 @@ function BlockCard({
               onChange={(next) => onChange(withElseBranch(command, next))}
               allowed={allowed}
               palette={palette}
+              drag={drag}
               label="条件不成立时执行的指令"
               depth={depth + 1}
+              container={elseContainer}
+              onRemove={onRemove}
+              onMoveToSlot={onMoveToSlot}
             />
           </div>
         </>
@@ -568,14 +771,242 @@ function BlockCard({
 /**
  * Structured, fully controlled block editor. The hat block is fixed; every
  * other command is limited by the level's allowed command kinds and can be
- * nested inside repeat and if bodies.
+ * nested inside repeat and if bodies. Blocks and palette chips can be dragged
+ * with a pointer; every action also has a keyboard/click path.
  */
 export default function BlockEditor({ level, program, onChange }: BlockEditorProps) {
   const allowed = useMemo(() => new Set(level.allowedCommands), [level.allowedCommands]);
   const palette = useMemo(() => paletteFor(allowed), [allowed]);
 
+  const sessionRef = useRef<PointerSession | null>(null);
+  const suppressClickUntilRef = useRef(0);
+  const [drag, setDrag] = useState<DragState | null>(null);
+
+  const clearSession = useCallback((session: PointerSession) => {
+    if (sessionRef.current === session) {
+      sessionRef.current = null;
+    }
+    if (session.captureEl.hasPointerCapture(session.pointerId)) {
+      session.captureEl.releasePointerCapture(session.pointerId);
+    }
+    setDrag(null);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      const session = sessionRef.current;
+      if (session === null || !session.active) {
+        return;
+      }
+      if (session.source.kind === "palette") {
+        suppressClickUntilRef.current = performance.now() + 600;
+      }
+      clearSession(session);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [clearSession]);
+
+  const resolveActiveDrop = (
+    x: number,
+    y: number,
+    source: DragSource,
+  ): ActiveDrop | null => {
+    const element = document.elementFromPoint(x, y);
+    if (element === null) {
+      return null;
+    }
+    const slot = parseDropSlot(element);
+    if (slot === null) {
+      return null;
+    }
+    if (source.kind === "block") {
+      if (isDescendantContainer(slot.container, source.address)) {
+        return null;
+      }
+      if (
+        sameContainerPath(slot.container, source.address.container) &&
+        (slot.index === source.address.index ||
+          slot.index === source.address.index + 1)
+      ) {
+        return null;
+      }
+    }
+    return slot;
+  };
+
+  const beginSession = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    source: DragSource,
+    preventDefault: boolean,
+  ) => {
+    if (event.button !== 0 || !event.isPrimary) {
+      return;
+    }
+    if (sessionRef.current !== null) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    if (
+      source.kind === "block" &&
+      target.closest("[data-drag-handle]") === null
+    ) {
+      return;
+    }
+    if (preventDefault) {
+      event.preventDefault();
+    }
+    const captureEl = event.currentTarget;
+    captureEl.setPointerCapture(event.pointerId);
+    sessionRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      captureEl,
+      source,
+      active: false,
+    };
+  };
+
+  const startBlock = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    address: BlockAddress,
+    command: Command,
+  ) => {
+    beginSession(event, { kind: "block", address, command }, true);
+  };
+
+  const startPalette = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    entry: PaletteEntry,
+  ) => {
+    suppressClickUntilRef.current = 0;
+    beginSession(event, { kind: "palette", command: entry.create() }, false);
+  };
+
+  const handleMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const session = sessionRef.current;
+    if (session === null || session.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const dx = event.clientX - session.startX;
+    const dy = event.clientY - session.startY;
+    if (!session.active) {
+      if (dx * dx + dy * dy < 25) {
+        return;
+      }
+      session.active = true;
+    }
+
+    const active = resolveActiveDrop(event.clientX, event.clientY, session.source);
+    setDrag({
+      x: event.clientX,
+      y: event.clientY,
+      source: session.source,
+      activeKey: active === null ? null : slotKey(active.container, active.index),
+    });
+  };
+
+  const handleEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const session = sessionRef.current;
+    if (session === null || session.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const wasActive = session.active;
+    const active = wasActive
+      ? resolveActiveDrop(event.clientX, event.clientY, session.source)
+      : null;
+
+    clearSession(session);
+
+    if (!wasActive) {
+      return;
+    }
+    if (session.source.kind === "palette") {
+      suppressClickUntilRef.current = performance.now() + 600;
+    }
+    if (active === null) {
+      return;
+    }
+
+    if (session.source.kind === "block") {
+      const next = moveCommand(program, session.source.address, active);
+      if (next !== program) {
+        onChange(next);
+      }
+      return;
+    }
+
+    const next = insertCommand(program, active, session.source.command);
+    if (next !== program) {
+      onChange(next);
+    }
+  };
+
+  const handleCancel = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const session = sessionRef.current;
+    if (session === null || session.pointerId !== event.pointerId) {
+      return;
+    }
+    if (session.source.kind === "palette" && session.active) {
+      suppressClickUntilRef.current = performance.now() + 600;
+    }
+    clearSession(session);
+  };
+
+  const consumeSuppressedClick = () => {
+    if (performance.now() <= suppressClickUntilRef.current) {
+      suppressClickUntilRef.current = 0;
+      return true;
+    }
+    suppressClickUntilRef.current = 0;
+    return false;
+  };
+
+  const removeAt = (address: BlockAddress) => {
+    const next = removeCommand(program, address);
+    if (next !== program) {
+      onChange(next);
+    }
+  };
+
+  const moveToSlot = (from: BlockAddress, toIndex: number) => {
+    const next = moveCommand(program, from, {
+      container: from.container,
+      index: toIndex,
+    });
+    if (next !== program) {
+      onChange(next);
+    }
+  };
+
+  const dragApi: DragApi = {
+    activeKey: drag === null ? null : drag.activeKey,
+    draggingKey:
+      drag !== null && drag.source.kind === "block"
+        ? addressKey(drag.source.address)
+        : null,
+    startBlock,
+    startPalette,
+    move: handleMove,
+    end: handleEnd,
+    cancel: handleCancel,
+    consumeSuppressedClick,
+  };
+
   return (
-    <section className="block-editor" aria-label="积木指令编辑器">
+    <section
+      className={`block-editor${drag !== null ? " block-editor--dragging" : ""}`}
+      aria-label="积木指令编辑器：拖动积木左侧的手柄可移动或嵌套，拖动指令栏积木可插入任意空位；也可以用上移、下移、删除按钮操作。"
+    >
       <div className="block-hat" aria-label="固定起始积木：当开始被点击">
         <span className="block-hat__dot" aria-hidden="true" />
         <span className="block-hat__text">当开始被点击</span>
@@ -584,22 +1015,49 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
         </span>
       </div>
 
-      <Palette entries={palette} onAdd={(entry) => onChange([...program, entry.create()])} />
+      <Palette
+        entries={palette}
+        onAdd={(entry) => onChange([...program, entry.create()])}
+        drag={dragApi}
+      />
 
       <BlockList
         commands={program}
         onChange={onChange}
         allowed={allowed}
         palette={palette}
+        drag={dragApi}
         label="程序指令"
         depth={0}
+        container={[]}
         showPalette={false}
+        onRemove={removeAt}
+        onMoveToSlot={moveToSlot}
       />
 
       <div className="block-editor__meta">
         <span>指令节点 {countCommands(program)} 个</span>
         <span>代码长度 {1 + countCommands(program)}</span>
       </div>
+
+      {drag !== null && (
+        <div
+          className="block-drag-ghost"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            pointerEvents: "none",
+            transform: `translate3d(${drag.x + 12}px, ${drag.y + 12}px, 0)`,
+          }}
+          aria-hidden="true"
+        >
+          <span className="block__kind">{KIND_GLYPH[drag.source.command.kind]}</span>
+          <span className="block-drag-ghost__label">
+            {describeCommand(drag.source.command)}
+          </span>
+        </div>
+      )}
     </section>
   );
 }

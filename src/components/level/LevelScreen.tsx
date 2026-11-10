@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatTextProgram } from "../../domain/commands";
 import type { Command, LevelSpec, RunResult, Score } from "../../domain/types";
 import { parseTextProgram } from "../../engine/parse";
@@ -8,6 +8,12 @@ import BlockEditor from "./BlockEditor";
 import GridStage from "./GridStage";
 import HintPanel from "./HintPanel";
 import ResultModal from "./ResultModal";
+import {
+  buildPlaybackFrames,
+  PLAYBACK_END_DELAY_MS,
+  PLAYBACK_STEP_MS,
+  type StageFrame,
+} from "./playback";
 import "./level.css";
 
 export interface LevelScreenProps {
@@ -49,12 +55,64 @@ export default function LevelScreen({
   const [score, setScore] = useState<Score | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
   const [attempts, setAttempts] = useState(0);
+  const [frames, setFrames] = useState<StageFrame[] | null>(null);
+  const [frameIndex, setFrameIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+
+  const finishedRef = useRef(false);
+  const resultRef = useRef<RunResult | null>(null);
+  const scoreRef = useRef<Score | null>(null);
+  const onCompleteRef = useRef(onComplete);
+  const levelIdRef = useRef(level.id);
 
   const pythonCode = pythonSource ?? formatTextProgram(program);
   const pythonLineCount =
     pythonCode.trim().length === 0
       ? 0
       : pythonCode.split("\n").filter((line) => line.trim().length > 0).length;
+
+  // Keep the timer callback current without restarting the playback timer when
+  // a callback prop or the stored result changes identity.
+  useEffect(() => {
+    resultRef.current = result;
+    scoreRef.current = score;
+    onCompleteRef.current = onComplete;
+    levelIdRef.current = level.id;
+  });
+
+  const finishPlayback = useCallback(() => {
+    if (finishedRef.current) {
+      return;
+    }
+    finishedRef.current = true;
+    const finalResult = resultRef.current;
+    const finalScore = scoreRef.current;
+
+    setPlaying(false);
+    setResultOpen(true);
+
+    if (finalResult !== null && finalResult.completed && finalScore !== null) {
+      onCompleteRef.current(levelIdRef.current, finalScore.stars);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!playing || frames === null) {
+      return;
+    }
+
+    const lastIndex = frames.length - 1;
+    if (frameIndex >= lastIndex) {
+      const timer = window.setTimeout(finishPlayback, PLAYBACK_END_DELAY_MS);
+      return () => window.clearTimeout(timer);
+    }
+
+    const timer = window.setTimeout(() => {
+      setFrameIndex((current) => (current < lastIndex ? current + 1 : current));
+    }, PLAYBACK_STEP_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [playing, frameIndex, frames, finishPlayback]);
 
   useEffect(() => {
     setProgram([]);
@@ -64,6 +122,10 @@ export default function LevelScreen({
     setScore(null);
     setResultOpen(false);
     setAttempts(0);
+    setFrames(null);
+    setFrameIndex(0);
+    setPlaying(false);
+    finishedRef.current = true;
   }, [level.id]);
 
   useEffect(() => {
@@ -71,6 +133,10 @@ export default function LevelScreen({
   }, [track]);
 
   const handleRun = () => {
+    if (playing) {
+      return;
+    }
+
     let activeProgram = program;
 
     if (track === "python") {
@@ -86,41 +152,78 @@ export default function LevelScreen({
 
     const run = simulate(level, activeProgram);
     const nextScore = scoreRun(level, activeProgram, run);
+    const nextFrames = buildPlaybackFrames(level, run);
 
+    finishedRef.current = false;
     setResult(run);
     setScore(nextScore);
-    setResultOpen(true);
+    setResultOpen(false);
     setAttempts((current) => current + 1);
+    setFrames(nextFrames);
+    setFrameIndex(0);
+    setPlaying(true);
+  };
 
-    if (run.completed) {
-      onComplete(level.id, nextScore.stars);
+  const handleSkip = () => {
+    if (!playing || frames === null) {
+      return;
     }
+    setFrameIndex(frames.length - 1);
+    finishPlayback();
+  };
+
+  const cancelPlayback = () => {
+    finishedRef.current = true;
+    setPlaying(false);
+    setFrames(null);
+    setFrameIndex(0);
+    setResultOpen(false);
   };
 
   const handleReset = () => {
+    if (playing) {
+      return;
+    }
+    cancelPlayback();
     setProgram([]);
     setPythonSource(null);
     setParseError(undefined);
     setResult(null);
     setScore(null);
-    setResultOpen(false);
   };
 
   const handleNext = () => {
     if (nextLevelId === undefined) {
       return;
     }
-    setResultOpen(false);
+    cancelPlayback();
     onNext();
   };
 
   const handleBack = () => {
-    setResultOpen(false);
+    cancelPlayback();
     onBack();
   };
 
-  const collectedCount = result?.collected.length ?? 0;
+  const currentFrame =
+    frames === null ? null : frames[Math.min(frameIndex, frames.length - 1)] ?? null;
+  const stepsDisplay = currentFrame !== null ? currentFrame.steps : result?.steps ?? "—";
+  const collectedCount =
+    currentFrame !== null ? currentFrame.collected.length : result?.collected.length ?? 0;
   const totalItems = level.goal.items.length;
+
+  const stateClassName = playing
+    ? "level-runbar__state level-runbar__state--playing"
+    : result === null
+      ? "level-runbar__state"
+      : `level-runbar__state ${result.completed ? "is-success" : "is-failed"}`;
+  const stateLabel = playing
+    ? "运行中…"
+    : result === null
+      ? "等待运行"
+      : result.completed
+        ? "已通关"
+        : "未完成";
 
   return (
     <section className="level-screen" aria-label={`第 ${level.index} 关：${level.title}`}>
@@ -143,6 +246,7 @@ export default function LevelScreen({
               className="level-track__button"
               aria-pressed={track === "blocks"}
               onClick={() => onTrackChange("blocks")}
+              disabled={playing}
             >
               积木
             </button>
@@ -151,6 +255,7 @@ export default function LevelScreen({
               className="level-track__button"
               aria-pressed={track === "python"}
               onClick={() => onTrackChange("python")}
+              disabled={playing}
             >
               Python
             </button>
@@ -163,12 +268,12 @@ export default function LevelScreen({
 
       <div className="level-layout">
         <div className="level-stage-column">
-          <GridStage level={level} run={result} />
+          <GridStage level={level} frame={currentFrame} />
 
           <div className="level-runbar" role="status" aria-live="polite">
             <span className="level-runbar__item">
               <span className="level-runbar__label">步数</span>
-              <strong>{result?.steps ?? "—"}</strong>
+              <strong>{stepsDisplay}</strong>
             </span>
             <span className="level-runbar__item">
               <span className="level-runbar__label">道具</span>
@@ -180,13 +285,7 @@ export default function LevelScreen({
               <span className="level-runbar__label">代码长度</span>
               <strong>{score?.codeLength ?? "—"}</strong>
             </span>
-            <span
-              className={`level-runbar__state${
-                result === null ? "" : result.completed ? " is-success" : " is-failed"
-              }`}
-            >
-              {result === null ? "等待运行" : result.completed ? "已通关" : "未完成"}
-            </span>
+            <span className={stateClassName}>{stateLabel}</span>
           </div>
         </div>
 
@@ -217,6 +316,7 @@ export default function LevelScreen({
                       setPythonSource(formatTextProgram(program));
                       setParseError(undefined);
                     }}
+                    disabled={playing}
                   >
                     载入积木代码
                   </button>
@@ -233,6 +333,7 @@ export default function LevelScreen({
                   aria-label="Python 代码编辑器"
                   aria-invalid={parseError !== undefined}
                   aria-describedby={parseError !== undefined ? "python-error" : "python-help"}
+                  disabled={playing}
                 />
                 {parseError !== undefined ? (
                   <p className="python-editor__error" id="python-error" role="alert">
@@ -253,13 +354,32 @@ export default function LevelScreen({
             )}
 
             <footer className="editor-panel__actions">
-              <button type="button" className="level-button level-button--run" onClick={handleRun}>
+              <button
+                type="button"
+                className="level-button level-button--run"
+                onClick={handleRun}
+                disabled={playing}
+              >
                 <span aria-hidden="true">▶</span>
                 运行程序
               </button>
-              <button type="button" className="level-button level-button--ghost" onClick={handleReset}>
+              <button
+                type="button"
+                className="level-button level-button--ghost"
+                onClick={handleReset}
+                disabled={playing}
+              >
                 重置程序
               </button>
+              {playing && (
+                <button
+                  type="button"
+                  className="level-button level-button--skip"
+                  onClick={handleSkip}
+                >
+                  跳过播放
+                </button>
+              )}
               <span className="editor-panel__par">
                 目标：代码 ≤ {level.parCode} · 步数 ≤ {level.parSteps}
               </span>
