@@ -165,7 +165,6 @@ export default function GridStage({ level, frame = null }: GridStageProps) {
                       <span className="stage__tree-canopy stage__tree-canopy--top" />
                     </span>
                   )}
-                  {/* The frozen lane is the last layer in its cell: a tree must never bury the crossing. */}
                   {isBridge && <span className="stage__bridge" />}
                 </div>
               );
