@@ -56,7 +56,7 @@ function makeLevel(
     hint: "",
     grid: { width: 3, height: 3, obstacles: [] },
     start: { x: 0, y: 0, direction: "north" },
-    goal: { kind: "reach", items: [], target: { x: 2, y: 2 } },
+    goal: { kind: "rescued", items: [], target: { x: 2, y: 2 } },
     allowedCommands: ["forward"],
     parCode: 1,
     parSteps: 2,

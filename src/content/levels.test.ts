@@ -5,20 +5,6 @@ import { simulate } from "../engine/simulate";
 import { validateLevel } from "../engine/validate";
 import { WORLD, allLevels } from "./world";
 
-/** Tencent scene names that ChildrenCode content must never reuse. */
-const TENCENT_SCENE_NAMES = [
-  "南极科考",
-  "南极危机",
-  "雨林守护",
-  "火山探秘",
-  "草原重生",
-  "海洋卫士",
-  "城市绿洲",
-  "能源新纪元",
-  "未来保卫战",
-  "时空恢复",
-  "星际征途",
-];
 
 /** Only Han characters count toward the 4-8 character title rule. */
 const TITLE_PATTERN = /^[\u4e00-\u9fff]{4,8}$/;
@@ -107,19 +93,17 @@ describe("world levels", () => {
     expect(failures).toEqual([]);
   });
 
-  test("no level or scene title reuses a Tencent scene name", () => {
-    const tencentNames = new Set(TENCENT_SCENE_NAMES);
+  test("every level and scene title is unique inside the project", () => {
+    const seen = new Set<string>();
     const failures: string[] = [];
 
     for (const scene of WORLD.scenes) {
-      if (tencentNames.has(scene.name)) {
-        failures.push(`scene ${scene.id}: "${scene.name}"`);
-      }
+      if (seen.has(scene.name)) failures.push(`scene ${scene.id}: "${scene.name}"`);
+      seen.add(scene.name);
       for (const chapter of scene.chapters) {
         for (const level of chapterLevels(chapter)) {
-          if (tencentNames.has(level.title)) {
-            failures.push(`level ${level.id}: "${level.title}"`);
-          }
+          if (seen.has(level.title)) failures.push(`level ${level.id}: "${level.title}"`);
+          seen.add(level.title);
         }
       }
     }

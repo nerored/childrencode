@@ -34,7 +34,7 @@ const TRACK_OPTIONS: TrackOption[] = [
   },
 ];
 
-const DISCLAIMER = "独立开源教育项目，与腾讯无关。";
+const DISCLAIMER = "原创开源学习项目，全部场景与关卡为本项目独立设计。";
 
 /** Landing screen: product position, track choice, and journey snapshot. */
 export default function HomeScreen({

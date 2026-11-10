@@ -9,6 +9,8 @@ import {
   removeCommand,
 } from "./commandTree";
 import type { BlockAddress, ContainerPath } from "./commandTree";
+import { pickSnap } from "./blockGraph";
+import type { SnapTarget } from "./blockGraph";
 
 export interface BlockEditorProps {
   level: LevelSpec;
@@ -37,7 +39,7 @@ function describeCondition(condition: Condition): string {
     case "pathAhead":
       return "前方可通行";
     case "itemAhead":
-      return "前方有道具";
+      return "前方有企鹅";
     case "varAtLeast":
       return `${condition.name} ≥ ${condition.value}`;
   }
@@ -70,10 +72,10 @@ type DragSource =
   | { kind: "palette"; command: Command };
 
 interface DragState {
-  x: number;
-  y: number;
+  ghostX: number;
+  ghostY: number;
   source: DragSource;
-  activeKey: string | null;
+  snapKey: string | null;
 }
 
 interface PointerSession {
@@ -83,6 +85,7 @@ interface PointerSession {
   captureEl: HTMLElement;
   source: DragSource;
   active: boolean;
+  grabOffset: { dx: number; dy: number };
 }
 
 interface ActiveDrop {
@@ -90,8 +93,14 @@ interface ActiveDrop {
   index: number;
 }
 
+interface SnapSocket {
+  key: string;
+  drop: ActiveDrop;
+  target: SnapTarget<string>;
+}
+
 interface DragApi {
-  activeKey: string | null;
+  snapKey: string | null;
   draggingKey: string | null;
   startBlock(
     event: ReactPointerEvent<HTMLButtonElement>,
@@ -118,6 +127,48 @@ function sameContainerPath(a: ContainerPath, b: ContainerPath): boolean {
     return false;
   }
   return a.every((segment, index) => segment === b[index]);
+}
+
+function isDropAllowed(source: DragSource, drop: ActiveDrop): boolean {
+  if (source.kind !== "block") {
+    return true;
+  }
+  if (isDescendantContainer(drop.container, source.address)) {
+    return false;
+  }
+  return !(
+    sameContainerPath(drop.container, source.address.container) &&
+    (drop.index === source.address.index ||
+      drop.index === source.address.index + 1)
+  );
+}
+
+/** Visible drop slots become snap sockets in viewport coordinates. */
+function collectSockets(root: HTMLElement | null, source: DragSource): SnapSocket[] {
+  if (root === null) {
+    return [];
+  }
+
+  const sockets: SnapSocket[] = [];
+  for (const element of root.querySelectorAll<HTMLElement>(
+    "[data-drop-container][data-drop-index]",
+  )) {
+    const drop = parseDropSlot(element);
+    if (drop === null || !isDropAllowed(source, drop)) {
+      continue;
+    }
+    if (element.getClientRects().length === 0) {
+      continue;
+    }
+    const rect = element.getBoundingClientRect();
+    const key = slotKey(drop.container, drop.index);
+    sockets.push({
+      key,
+      drop,
+      target: { address: key, edge: "next", x: rect.left, y: rect.top },
+    });
+  }
+  return sockets;
 }
 
 function parseDropSlot(element: Element): ActiveDrop | null {
@@ -344,6 +395,7 @@ function Palette({ entries, onAdd, drag, compact = false }: PaletteProps) {
             type="button"
             className="block-palette__chip"
             draggable={false}
+            style={{ touchAction: "none" }}
             onDragStart={(event) => event.preventDefault()}
             onPointerDown={(event) => drag.startPalette(event, entry)}
             onPointerMove={drag.move}
@@ -397,7 +449,7 @@ function ConditionFields({ condition, onChange }: ConditionFieldsProps) {
           aria-label="条件类型"
         >
           <option value="pathAhead">前方可通行</option>
-          <option value="itemAhead">前方有道具</option>
+          <option value="itemAhead">前方有企鹅</option>
           <option value="varAtLeast">变量 ≥</option>
         </select>
       </label>
@@ -517,15 +569,15 @@ function CommandFields({ command, onChange }: CommandFieldsProps) {
 interface DropSlotProps {
   container: ContainerPath;
   index: number;
-  activeKey: string | null;
+  snapKey: string | null;
 }
 
 /** A real list item that accepts a drop; it is never display:none. */
-function DropSlot({ container, index, activeKey }: DropSlotProps) {
-  const isActive = activeKey === slotKey(container, index);
+function DropSlot({ container, index, snapKey }: DropSlotProps) {
+  const isSnapped = snapKey === slotKey(container, index);
   return (
     <li
-      className={`drop-slot${isActive ? " drop-slot--active" : ""}`}
+      className={`drop-slot${isSnapped ? " drop-slot--snap" : ""}`}
       data-drop-container={JSON.stringify(container)}
       data-drop-index={index}
       aria-hidden="true"
@@ -576,9 +628,12 @@ function BlockList({
               <DropSlot
                 container={container}
                 index={index}
-                activeKey={drag.activeKey}
+                snapKey={drag.snapKey}
               />
-              <li className="block-list__item" data-block-index={index}>
+              <li
+                className={`block-list__item${index === 0 ? " block-list__item--first" : ""}${index === commands.length - 1 ? " block-list__item--last" : ""}`}
+                data-block-index={index}
+              >
                 <BlockCard
                   command={command}
                   address={address}
@@ -606,13 +661,11 @@ function BlockList({
             </Fragment>
           );
         })}
-        <DropSlot container={container} index={commands.length} activeKey={drag.activeKey} />
+        <DropSlot container={container} index={commands.length} snapKey={drag.snapKey} />
       </ol>
 
       {commands.length === 0 && (
-        <p className="block-list__empty">
-          还没有指令{showPalette ? "，从下方添加一条" : "，从上方选择指令添加"}。
-        </p>
+        <p className="block-list__empty">还没有指令，从下方选择指令添加。</p>
       )}
 
       {showPalette && <Palette entries={palette} onAdd={add} drag={drag} compact />}
@@ -654,6 +707,7 @@ function BlockCard({
   const bodyContainer: ContainerPath = [...address.container, address.index, "body"];
   const thenContainer: ContainerPath = [...address.container, address.index, "then"];
   const elseContainer: ContainerPath = [...address.container, address.index, "else"];
+  const socketSnapped = drag.snapKey === slotKey(address.container, address.index + 1);
 
   return (
     <article
@@ -764,6 +818,11 @@ function BlockCard({
           </div>
         </>
       )}
+
+      <span
+        className={`block__socket${socketSnapped ? " block__socket--snap" : ""}`}
+        aria-hidden="true"
+      />
     </article>
   );
 }
@@ -779,6 +838,7 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
   const palette = useMemo(() => paletteFor(allowed), [allowed]);
 
   const sessionRef = useRef<PointerSession | null>(null);
+  const editorRootRef = useRef<HTMLElement | null>(null);
   const suppressClickUntilRef = useRef(0);
   const [drag, setDrag] = useState<DragState | null>(null);
 
@@ -820,22 +880,32 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
       return null;
     }
     const slot = parseDropSlot(element);
-    if (slot === null) {
+    if (slot === null || !isDropAllowed(source, slot)) {
       return null;
     }
-    if (source.kind === "block") {
-      if (isDescendantContainer(slot.container, source.address)) {
-        return null;
-      }
-      if (
-        sameContainerPath(slot.container, source.address.container) &&
-        (slot.index === source.address.index ||
-          slot.index === source.address.index + 1)
-      ) {
-        return null;
-      }
-    }
     return slot;
+  };
+
+  /** Nearest visible socket within the magnet radius of the ghost's top-left. */
+  const resolveSnap = (
+    session: PointerSession,
+    x: number,
+    y: number,
+  ): { socket: SnapSocket; x: number; y: number } | null => {
+    const sockets = collectSockets(editorRootRef.current, session.source);
+    const snap = pickSnap(
+      sockets.map((socket) => socket.target),
+      { x, y },
+      session.grabOffset,
+    );
+    if (snap === null) {
+      return null;
+    }
+    const socket = sockets.find((candidate) => candidate.key === snap.address);
+    if (socket === undefined) {
+      return null;
+    }
+    return { socket, x: snap.x, y: snap.y };
   };
 
   const beginSession = (
@@ -863,6 +933,13 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
       event.preventDefault();
     }
     const captureEl = event.currentTarget;
+    const sourceEl =
+      source.kind === "block" ? target.closest<HTMLElement>(".block") : captureEl;
+    const sourceRect = sourceEl?.getBoundingClientRect();
+    const grabOffset =
+      sourceRect === undefined
+        ? { dx: 0, dy: 0 }
+        : { dx: sourceRect.left - event.clientX, dy: sourceRect.top - event.clientY };
     captureEl.setPointerCapture(event.pointerId);
     sessionRef.current = {
       pointerId: event.pointerId,
@@ -871,6 +948,7 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
       captureEl,
       source,
       active: false,
+      grabOffset,
     };
   };
 
@@ -905,12 +983,12 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
       session.active = true;
     }
 
-    const active = resolveActiveDrop(event.clientX, event.clientY, session.source);
+    const snap = resolveSnap(session, event.clientX, event.clientY);
     setDrag({
-      x: event.clientX,
-      y: event.clientY,
+      ghostX: snap === null ? event.clientX + session.grabOffset.dx : snap.x,
+      ghostY: snap === null ? event.clientY + session.grabOffset.dy : snap.y,
       source: session.source,
-      activeKey: active === null ? null : slotKey(active.container, active.index),
+      snapKey: snap === null ? null : snap.socket.key,
     });
   };
 
@@ -921,9 +999,15 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
     }
 
     const wasActive = session.active;
-    const active = wasActive
-      ? resolveActiveDrop(event.clientX, event.clientY, session.source)
+    const snap = wasActive
+      ? resolveSnap(session, event.clientX, event.clientY)
       : null;
+    const active =
+      snap !== null
+        ? snap.socket.drop
+        : wasActive
+          ? resolveActiveDrop(event.clientX, event.clientY, session.source)
+          : null;
 
     clearSession(session);
 
@@ -989,7 +1073,7 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
   };
 
   const dragApi: DragApi = {
-    activeKey: drag === null ? null : drag.activeKey,
+    snapKey: drag === null ? null : drag.snapKey,
     draggingKey:
       drag !== null && drag.source.kind === "block"
         ? addressKey(drag.source.address)
@@ -1004,6 +1088,7 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
 
   return (
     <section
+      ref={editorRootRef}
       className={`block-editor${drag !== null ? " block-editor--dragging" : ""}`}
       aria-label="积木指令编辑器：拖动积木左侧的手柄可移动或嵌套，拖动指令栏积木可插入任意空位；也可以用上移、下移、删除按钮操作。"
     >
@@ -1014,12 +1099,6 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
           ✦
         </span>
       </div>
-
-      <Palette
-        entries={palette}
-        onAdd={(entry) => onChange([...program, entry.create()])}
-        drag={dragApi}
-      />
 
       <BlockList
         commands={program}
@@ -1035,6 +1114,12 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
         onMoveToSlot={moveToSlot}
       />
 
+      <Palette
+        entries={palette}
+        onAdd={(entry) => onChange([...program, entry.create()])}
+        drag={dragApi}
+      />
+
       <div className="block-editor__meta">
         <span>指令节点 {countCommands(program)} 个</span>
         <span>代码长度 {1 + countCommands(program)}</span>
@@ -1042,13 +1127,13 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
 
       {drag !== null && (
         <div
-          className="block-drag-ghost"
+          className={`block-drag-ghost${drag.snapKey === null ? "" : " block-drag-ghost--snap"}`}
           style={{
             position: "fixed",
             top: 0,
             left: 0,
             pointerEvents: "none",
-            transform: `translate3d(${drag.x + 12}px, ${drag.y + 12}px, 0)`,
+            transform: `translate3d(${drag.ghostX}px, ${drag.ghostY}px, 0)`,
           }}
           aria-hidden="true"
         >

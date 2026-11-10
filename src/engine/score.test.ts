@@ -23,7 +23,7 @@ function makeLevel(options: LevelOptions = {}): LevelSpec {
     grid: { width: 5, height: 5, obstacles: [] },
     start: { x: 0, y: 0, direction: "east" },
     goal: {
-      kind: "collect",
+      kind: "rescued",
       items: options.items ?? [],
       target: options.target ?? { x: 2, y: 0 },
     },

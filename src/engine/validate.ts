@@ -2,6 +2,7 @@ import { cellKey, stepPoint } from "../domain/commands";
 import type { LevelSpec, Point, ScenePack } from "../domain/types";
 import { codeLength } from "./score";
 import { simulate } from "./simulate";
+import { frozenLane } from "./water";
 
 const LEVEL_ID_PATTERN = /^s\d{2}-c\d{2}-k\d{2}-l\d{2}$/;
 const MIN_GRID = 5;
@@ -22,15 +23,26 @@ function isNonEmpty(text: unknown): boolean {
   return typeof text === "string" && text.trim().length > 0;
 }
 
-/** Flood fill through non-obstacle cells starting at the level's start cell. */
+/**
+ * Flood fill through non-obstacle cells starting at the level's start cell.
+ * Water rows only connect through their frozen lane.
+ */
 function reachableCells(level: LevelSpec): Set<string> {
   const obstacles = new Set(level.grid.obstacles.map(cellKey));
+  const water = new Set((level.water ?? []).map(cellKey));
   const visited = new Set<string>();
   const start: Point = { x: level.start.x, y: level.start.y };
 
   if (!isInsideGrid(level, start)) {
     return visited;
   }
+
+  const walkable = (point: Point): boolean => {
+    if (!isInsideGrid(level, point) || obstacles.has(cellKey(point))) {
+      return false;
+    }
+    return !water.has(cellKey(point)) || frozenLane(level, point.y) === point.x;
+  };
 
   const queue: Point[] = [start];
   visited.add(cellKey(start));
@@ -39,11 +51,11 @@ function reachableCells(level: LevelSpec): Set<string> {
     const current = queue.shift() as Point;
     for (const direction of ["north", "east", "south", "west"] as const) {
       const next = stepPoint(current, direction);
-      if (!isInsideGrid(level, next)) {
+      if (!walkable(next)) {
         continue;
       }
       const key = cellKey(next);
-      if (visited.has(key) || obstacles.has(key)) {
+      if (visited.has(key)) {
         continue;
       }
       visited.add(key);
@@ -54,12 +66,42 @@ function reachableCells(level: LevelSpec): Set<string> {
   return visited;
 }
 
+/** Frozen lane cells of a level, in row order. */
+function frozenLaneCells(level: LevelSpec): Point[] {
+  const rows = new Set((level.water ?? []).map((cell) => cell.y));
+  return [...rows].sort((a, b) => a - b).map((y) => ({ x: frozenLane(level, y), y }));
+}
+
+/** Cells reachable by 4-way steps from `from` when water blocks every non-lane cell. */
+function walkFrom(level: LevelSpec, from: Point, known: Set<string>): Set<string> {
+  const seen = new Set<string>([cellKey(from)]);
+  const water = new Set((level.water ?? []).map(cellKey));
+  const obstacles = new Set(level.grid.obstacles.map(cellKey));
+  const open = (point: Point): boolean =>
+    isInsideGrid(level, point) &&
+    !obstacles.has(cellKey(point)) &&
+    (!water.has(cellKey(point)) || frozenLane(level, point.y) === point.x);
+  const queue: Point[] = [from];
+  while (queue.length > 0) {
+    const current = queue.shift() as Point;
+    for (const direction of ["north", "east", "south", "west"] as const) {
+      const next = stepPoint(current, direction);
+      const key = cellKey(next);
+      if (seen.has(key) || !open(next) || !known.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      queue.push(next);
+    }
+  }
+  return seen;
+}
+
 /**
  * Validate one level definition and return human-readable problems.
  * An empty array means the level is well formed and its standard answer works.
  */
-export function validateLevel(level: LevelSpec): string[] {
-  const errors: string[] = [];
+export function validateLevel(level: LevelSpec): string[] {  const errors: string[] = [];
 
   if (!LEVEL_ID_PATTERN.test(level.id)) {
     errors.push(`id must match sNN-cNN-kNN-lNN (found "${level.id}")`);
@@ -108,6 +150,16 @@ export function validateLevel(level: LevelSpec): string[] {
     errors.push("hint must not be empty");
   }
 
+  const waterKeys = new Set((level.water ?? []).map(cellKey));
+  for (const cell of level.water ?? []) {
+    if (!isInsideGrid(level, cell)) {
+      errors.push(`water ${cellKey(cell)} must be inside the grid`);
+    }
+    if (obstacleKeys.has(cellKey(cell))) {
+      errors.push(`water ${cellKey(cell)} must not overlap an obstacle`);
+    }
+  }
+
   if (level.standardAnswer.length === 0) {
     errors.push("standardAnswer must not be empty");
   }
@@ -127,10 +179,20 @@ export function validateLevel(level: LevelSpec): string[] {
   }
 
   const reachable = reachableCells(level);
+  const reachableFromStart = new Set(reachable);
+  for (const lane of frozenLaneCells(level)) {
+    for (const next of walkFrom(level, lane, reachableFromStart)) reachableFromStart.add(next);
+  }
   for (const item of level.goal.items) {
-    if (!reachable.has(cellKey(item))) {
-      errors.push(`item ${cellKey(item)} is not reachable from start`);
+    if (!reachableFromStart.has(cellKey(item))) {
+      errors.push(`penguin ${cellKey(item)} is not reachable from start`);
     }
+    if (waterKeys.has(cellKey(item)) && frozenLane(level, item.y) !== item.x) {
+      errors.push(`penguin ${cellKey(item)} stands in open water`);
+    }
+  }
+  if (waterKeys.has(cellKey(level.goal.target)) && frozenLane(level, level.goal.target.y) !== level.goal.target.x) {
+    errors.push(`target ${cellKey(level.goal.target)} stands in open water`);
   }
 
   return errors;

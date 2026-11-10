@@ -209,7 +209,7 @@ export default function LevelScreen({
     frames === null ? null : frames[Math.min(frameIndex, frames.length - 1)] ?? null;
   const stepsDisplay = currentFrame !== null ? currentFrame.steps : result?.steps ?? "—";
   const collectedCount =
-    currentFrame !== null ? currentFrame.collected.length : result?.collected.length ?? 0;
+    currentFrame !== null ? currentFrame.rescued.length : result?.collected.length ?? 0;
   const totalItems = level.goal.items.length;
 
   const stateClassName = playing
@@ -276,7 +276,7 @@ export default function LevelScreen({
               <strong>{stepsDisplay}</strong>
             </span>
             <span className="level-runbar__item">
-              <span className="level-runbar__label">道具</span>
+              <span className="level-runbar__label">企鹅</span>
               <strong>
                 {collectedCount}/{totalItems}
               </strong>

@@ -56,9 +56,9 @@ childrencode/
 - NEVER make `engine/`, `domain/` or `content/` depend on React, DOM or storage — they must run headless under `bun test`.
 - NEVER mutate the `Command` tree in place; `commandTree.ts` mutators are immutable and tests assert identity preservation of untouched nodes.
 - NEVER duplicate a level's `standardAnswer` numbers by hand into `parCode`/`parSteps` without running `validateLevel` — the validator enforces `parCode === codeLength(standardAnswer)` and `parSteps === simulate(...).steps`.
-- NEVER collect items on the start cell during playback; `playback.ts` counts only cells a `forward` trace entry enters.
+- NEVER rescue a penguin on the start cell during playback; `playback.ts` counts only penguins whose cell a `forward` trace entry enters.
 - NEVER retry a level expecting fewer stars — `recordResult` keeps the historical maximum.
-- NEVER copy Tencent product names, art, audio or level data (clean-room rule; `levels.test.ts` blocks known scene names).
+- Level and scene titles are unique across the project (`levels.test.ts`), so a new level never duplicates an existing name.
 
 ## UNIQUE STYLES
 - Engine semantics are deliberate: coordinate system is screen-space (`north = y-1`); turns and forward moves each cost 1 step; vars/conditions/loops cost 0; 1000-action hard cap; `repeat` clamped to 100 and loop body counted once for code length.

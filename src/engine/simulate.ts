@@ -1,5 +1,6 @@
 import { cellKey, stepPoint, turnDirection } from "../domain/commands";
 import type { Command, Condition, Direction, LevelSpec, Point, RunResult } from "../domain/types";
+import { isWaterBlocked } from "./water";
 
 /** Hard ceiling on movement and turn actions in a single run. */
 const MAX_ACTIONS = 1000;
@@ -28,6 +29,7 @@ export function simulate(level: LevelSpec, program: Command[]): RunResult {
   const width = level.grid.width;
   const height = level.grid.height;
   const obstacleKeys = new Set(level.grid.obstacles.map(cellKey));
+  const waterKeys = new Set((level.water ?? []).map(cellKey));
   const itemKeys = new Set(level.goal.items.map(cellKey));
   const collected = new Set<string>();
   const vars: Record<string, number> = {};
@@ -93,6 +95,10 @@ export function simulate(level: LevelSpec, program: Command[]): RunResult {
             }
             if (isObstacle(next)) {
               failureReason = "obstacle";
+              return false;
+            }
+            if (isWaterBlocked(level, waterKeys, next)) {
+              failureReason = "water";
               return false;
             }
             if (!spendStep()) {
