@@ -365,6 +365,8 @@ type View =
 3. 章节地图展示本章标签、四个检查点和每关的星数。锁定的章节和关卡显示锁标记，不能进入。
 4. 关卡页左栏是网格舞台和运行状态，右栏是编辑器与提示面板。
 
+页面采用天蓝/白云浅色主题，颜色变量集中在 `src/styles.css` 与 `src/components/level/level.css`。
+
 ### 8.3 关卡页状态
 
 `LevelScreen` 持有：
@@ -373,18 +375,25 @@ type View =
 - `pythonSource`：文本编辑器的原始输入，未编辑时为 `null`。
 - `parseError`：文本解析错误。
 - `result`、`score`：最近一次运行的结果和评分。
-- `resultOpen`：是否显示结算面板。
+- `frames`、`frameIndex`、`playing`：播放帧、当前帧与播放状态。
+- `resultOpen`：是否显示结算面板（播放结束后才为 true）。
 - `attempts`：本次进入关卡后的运行次数。
 
-点击运行时，图形化轨道直接使用 `program`；Python 轨道先调用 `parseTextProgram()`，失败则显示错误并中止。解析成功后，指令树写回 `program`，再交给 `simulate()` 和 `scoreRun()`。完成的关卡会调用 `onComplete()`，由 `App` 合并最高星并写入 localStorage。
+点击运行时，图形化轨道直接使用 `program`；Python 轨道先调用 `parseTextProgram()`，失败则显示错误并中止。解析成功后，指令树写回 `program`，再交给 `simulate()` 和 `scoreRun()`，并由 `buildPlaybackFrames()` 生成播放帧。播放结束后才打开结算面板并调用 `onComplete()`，由 `App` 合并最高星并写入 localStorage。
 
 结算面板展示星数、代码长度和步数的达标情况。参考解在通关后或失败两次后可见，内容来自 `level.standardAnswer` 的文本格式化结果。“下一关”只在已通关且存在下一个已解锁关卡时可用。
 
-网格舞台是纯展示组件。它根据关卡的网格、起点、道具、终点和最近一次运行的 `trace` 计算每个格子的样式，不做逐步动画，也不参与规则判定。
+网格舞台是纯展示组件。它接收关卡和当前播放帧，渲染网格、道具、终点、轨迹与绝对定位的小车，不负责计时，也不参与规则判定。
+
+### 8.4 拖拽与播放
+
+积木拖拽由 `commandTree.ts` 的纯函数和 `BlockEditor` 的指针会话组成。每个容器用 `data-drop-container` 标识插入位置，每块积木用 `data-drag-handle` 提供拖拽手柄；`pointermove` 通过 `elementFromPoint` 命中空位，`pointerup` 提交 `moveCommand` 或 `insertCommand`。拖入自身子树会被拒绝；点击、上移、下移与删除按钮保留为键盘替代。
+
+运行时 `LevelScreen` 先调用 `simulate()` 和 `scoreRun()`，再由 `playback.ts` 的 `buildPlaybackFrames()` 从 `trace` 生成 `StageFrame[]`。`GridStage` 只渲染当前帧，小车的绝对定位由 `--agent-x` / `--agent-y` 驱动 CSS transition；每 280ms 推进一帧，末帧后 240ms 打开结算面板，“跳过播放”直接到末帧。
 
 ## 9. 测试
 
-当前有 9 个测试文件、126 个用例，全部通过 `bun test` 运行：
+当前有 11 个测试文件、159 个用例，全部通过 `bun test` 运行：
 
 | 文件 | 覆盖内容 |
 | --- | --- |
@@ -397,6 +406,8 @@ type View =
 | `src/content/world.test.ts` | 世界层级、唯一 id、查询顺序、完整性 |
 | `src/state/progress.test.ts` | 存储容错、最佳星数、章节与场景上限、解锁 |
 | `src/state/unlock.test.ts` | 15/24 与 29/48 门槛、顺序解锁、下一关、重置 |
+| `src/components/level/commandTree.test.ts` | 拖拽路径解析、插入/删除/移动、嵌套与子树保护 |
+| `src/components/level/playback.test.ts` | 起始帧、逐帧轨迹、收集进度、失败与空轨迹 |
 
 测试使用内存中的存储替身代替浏览器 localStorage，因此不依赖运行环境，也没有固定等待或时间相关断言。项目目前没有浏览器端到端测试，界面交互不在自动化测试范围内。
 
@@ -426,7 +437,8 @@ bun run verify     # typecheck、test、build 依次执行
 ## 11. 已知限制
 
 - 舞台是 CSS 绘制的 2.5D 网格，不是 3D 场景，也没有 WebGL 渲染。
-- 图形化编辑器是自建的结构化 React 组件，不是 Blockly，不兼容 Scratch 或 Blockly 的积木格式。
+- 图形化编辑器是自建的结构化 React 组件，支持指针拖拽重排与嵌套，也保留点击和上下移动按钮；它不是 Blockly，不兼容 Scratch 或 Blockly 的积木格式。
+- 页面主题为天蓝/白云浅色风格，颜色由 CSS 变量控制，不依赖图片素材。
 - Python 轨道是受限 DSL，由正则和缩进解析器处理，不执行真实 Python 代码。
 - 图形化和 Python 两条轨道已经实现。C++ 和 AI 关卡没有实现，只在研究报告中列为后续路线。
 - 没有账号、后端、云同步、排行榜或付费系统。进度只存在当前浏览器，清除站点数据会丢失。
