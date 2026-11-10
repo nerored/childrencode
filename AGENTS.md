@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
 **Generated:** 2026-11-10
-**Commit:** c00a268
+**Commit:** 9c803b6
 **Branch:** main
 
 ## OVERVIEW
@@ -25,7 +25,7 @@ childrencode/
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| Add / edit a level | `src/content/scenes/{windmill,tide,gears,mist}.ts` | see `src/content/AGENTS.md` |
+| Add / edit a level | `src/content/scenes/` (windmill, tide, gears, mist) | see `src/content/AGENTS.md` |
 | Run/score semantics | `src/engine/simulate.ts`, `src/engine/score.ts` | `docs/architecture.md` §4 is the spec |
 | Text DSL grammar | `src/engine/parse.ts` | formatter counterpart: `formatTextProgram` in `domain/commands.ts` |
 | Unlock rules / storage | `src/state/progress.ts` | star-only derivation, `childrencode.progress.v1` |
