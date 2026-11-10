@@ -1,49 +1,152 @@
-function IslandMark() {
-  return (
-    <svg
-      className="hero__mark"
-      viewBox="0 0 64 64"
-      role="img"
-      aria-label="海岛徽标"
-    >
-      <circle cx="32" cy="32" r="29" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.45" />
-      <path
-        d="M10 40c6-4 10-4 16-1s11 3 17-1 8-4 11-3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-      <path
-        d="M22 34c0-7 4.5-12 10-12s10 5 10 12"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-      <circle cx="25" cy="22" r="2.2" fill="currentColor" />
-      <circle cx="39" cy="22" r="2.2" fill="currentColor" />
-    </svg>
-  );
-}
+import { useEffect, useState, type ReactNode } from "react";
+import ChapterMap from "./components/chapter/ChapterMap";
+import type { Track } from "./components/common/track";
+import HomeScreen from "./components/home/HomeScreen";
+import LevelScreen from "./components/level/LevelScreen";
+import WorldMap from "./components/world/WorldMap";
+import { WORLD, findLevel } from "./content/world";
+import {
+  isChapterUnlocked,
+  isLevelUnlocked,
+  loadProgress,
+  nextLevelId as nextUnlockedLevelId,
+  recordResult,
+  saveProgress,
+} from "./state/progress";
+import type { StarRating, StoredProgress } from "./state/progress";
 
+type View =
+  | { name: "home" }
+  | { name: "world" }
+  | { name: "chapter"; sceneId: string; chapterId: string }
+  | { name: "level"; levelId: string };
+
+/** Application shell: owns the current view, track, and persisted progress. */
 export default function App() {
+  const [progress, setProgress] = useState<StoredProgress>(() => loadProgress());
+  const [track, setTrack] = useState<Track>("blocks");
+  const [view, setView] = useState<View>({ name: "home" });
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [view]);
+
+  function goHome() {
+    setView({ name: "home" });
+  }
+
+  function openWorld() {
+    setView({ name: "world" });
+  }
+
+  function openScene(sceneId: string) {
+    const scene = WORLD.scenes.find((candidate) => candidate.id === sceneId);
+    if (!scene) return;
+
+    const chapters = [...scene.chapters].sort((a, b) => a.order - b.order);
+    const target =
+      chapters.find((chapter) => isChapterUnlocked(progress, scene, chapter)) ?? chapters[0];
+    if (!target) return;
+
+    setView({ name: "chapter", sceneId: scene.id, chapterId: target.id });
+  }
+
+  function selectChapter(chapterId: string) {
+    if (view.name !== "chapter") return;
+    setView({ name: "chapter", sceneId: view.sceneId, chapterId });
+  }
+
+  function openLevel(levelId: string) {
+    if (!findLevel(levelId)) return;
+    if (!isLevelUnlocked(progress, WORLD, levelId)) return;
+    setView({ name: "level", levelId });
+  }
+
+  function handleComplete(levelId: string, stars: number) {
+    setProgress((current) => {
+      const normalized = Number.isFinite(stars)
+        ? Math.min(3, Math.max(0, Math.trunc(stars)))
+        : 0;
+      const next = recordResult(current, levelId, normalized as StarRating);
+      saveProgress(next);
+      return next;
+    });
+  }
+
+  function goToLevelChapter(levelId: string) {
+    const level = findLevel(levelId);
+    if (!level) {
+      setView({ name: "world" });
+      return;
+    }
+    setView({ name: "chapter", sceneId: level.sceneId, chapterId: level.chapterId });
+  }
+
+  function handleLevelBack() {
+    if (view.name === "level") goToLevelChapter(view.levelId);
+  }
+
+  function handleLevelNext() {
+    if (view.name !== "level") return;
+
+    const nextId = nextUnlockedLevelId(progress, WORLD, view.levelId);
+    if (nextId) {
+      setView({ name: "level", levelId: nextId });
+      return;
+    }
+    goToLevelChapter(view.levelId);
+  }
+
+  let screen: ReactNode;
+
+  if (view.name === "home") {
+    screen = (
+      <HomeScreen
+        progress={progress}
+        track={track}
+        onTrackChange={setTrack}
+        onStart={openWorld}
+      />
+    );
+  } else if (view.name === "world") {
+    screen = <WorldMap progress={progress} onOpenScene={openScene} onBack={goHome} />;
+  } else if (view.name === "chapter") {
+    const scene = WORLD.scenes.find((candidate) => candidate.id === view.sceneId);
+
+    screen = scene ? (
+      <ChapterMap
+        progress={progress}
+        scene={scene}
+        chapterId={view.chapterId}
+        onSelectChapter={selectChapter}
+        onOpenLevel={openLevel}
+        onBack={openWorld}
+      />
+    ) : (
+      <WorldMap progress={progress} onOpenScene={openScene} onBack={goHome} />
+    );
+  } else {
+    const level = findLevel(view.levelId);
+
+    screen = level ? (
+      <LevelScreen
+        level={level}
+        track={track}
+        onTrackChange={setTrack}
+        onBack={handleLevelBack}
+        onComplete={handleComplete}
+        onNext={handleLevelNext}
+        nextLevelId={nextUnlockedLevelId(progress, WORLD, level.id)}
+      />
+    ) : (
+      <WorldMap progress={progress} onOpenScene={openScene} onBack={goHome} />
+    );
+  }
+
   return (
-    <main className="page">
-      <section className="hero" aria-labelledby="hero-title">
-        <div className="hero__badge">
-          <span className="hero__dot" aria-hidden="true" />
-          正在建设
-        </div>
-        <IslandMark />
-        <h1 className="hero__title" id="hero-title">
-          ChildrenCode
-        </h1>
-        <p className="hero__tagline">在岛屿闯关中学会编程</p>
-        <p className="hero__note">
-          一座座小岛，一关关挑战。用代码解开谜题，让每一步思考都变成看得见的改变。
-        </p>
-      </section>
-    </main>
+    <div className="app-shell">
+      <div className="app-shell__aurora" aria-hidden="true" />
+      {screen}
+    </div>
   );
 }
