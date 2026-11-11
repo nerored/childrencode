@@ -4,7 +4,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import type { LevelSpec } from "../../../domain/types";
 import type { StageFrame } from "../playback";
 import { buildStageScene, cellToWorld, directionToYaw, type StageGround } from "./sceneModel";
-import { buildCoder } from "./models/coder";
+import { buildCoder, type CoderAnimation, type CoderAnimState } from "./models/coder";
 import { buildRescueBase } from "./models/base";
 import { buildCornerMarker, buildPine } from "./models/flora";
 import { buildLandmark } from "./models/landmark";
@@ -73,6 +73,8 @@ export class StageScene {
   private level: LevelSpec | null = null;
   private spec: ReturnType<typeof buildStageScene> | null = null;
   private agent: THREE.Group | null = null;
+  private agentAnimation: CoderAnimation | null = null;
+  private pendingIdle = true;
   private targetAgentPosition = new THREE.Vector3();
   private targetAgentYaw = 0;
   private agentInitialized = false;
@@ -160,6 +162,15 @@ export class StageScene {
     this.spec = next;
     this.targetAgentPosition.copy(this.worldPosition(next.agent.x, next.agent.y));
     this.targetAgentYaw = directionToYaw(next.agent.direction);
+    const action = next.agent.action;
+    const animationState: CoderAnimState =
+      action === "forward" || action === "backward"
+        ? "move"
+        : action !== null && action.startsWith("turn")
+          ? "turn"
+          : "idle";
+    this.agentAnimation?.setState(animationState);
+    this.pendingIdle = frame?.done ?? true;
   }
 
   resetCamera(): void {
@@ -351,32 +362,35 @@ export class StageScene {
     base.position.copy(this.worldPosition(this.spec.base.x, this.spec.base.y));
     this.content.add(base);
     this.agent = buildCoder(theme);
+    this.agentAnimation = (this.agent.userData.coderAnimation as CoderAnimation | undefined) ?? null;
+    this.agentAnimation?.setState("idle");
+    this.pendingIdle = true;
     this.dynamic.add(this.agent);
     this.agentInitialized = false;
     this.targetAgentPosition.copy(this.worldPosition(this.spec.agent.x, this.spec.agent.y));
     this.targetAgentYaw = directionToYaw(this.spec.agent.direction);
     const landmark = buildLandmark(theme);
     const landmarkPosition = cellToWorld(width - 1, 0, width, height);
-    landmark.position.set(landmarkPosition.x + 1.25, 0.2, landmarkPosition.z - 1.25);
+    landmark.position.set(landmarkPosition.x + 1.25, 0, landmarkPosition.z - 1.25);
     landmark.rotation.y = Math.atan2(-landmark.position.x, -landmark.position.z);
     this.content.add(landmark);
     const groundWidth = width + 2.4;
     const groundDepth = height + 2.4;
     const island = new THREE.Group();
     const iceSide = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.5, 0.5, 0.35, 64),
+      new THREE.CylinderGeometry(0.5, 0.5, 0.34, 64),
       new THREE.MeshStandardMaterial({ color: theme.iceSide, roughness: 0.8 }),
     );
     iceSide.scale.set(groundWidth, 1, groundDepth);
-    iceSide.position.y = -0.335;
+    iceSide.position.y = -0.36;
     iceSide.receiveShadow = true;
     island.add(iceSide);
     const snowTop = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.5, 0.5, 0.03, 64),
+      new THREE.CylinderGeometry(0.5, 0.5, 0.06, 64),
       new THREE.MeshStandardMaterial({ color: theme.snow, roughness: 0.9 }),
     );
-    snowTop.scale.set(groundWidth, 1, groundDepth);
-    snowTop.position.y = -0.175;
+    snowTop.scale.set(groundWidth + 0.08, 1, groundDepth + 0.08);
+    snowTop.position.y = -0.17;
     snowTop.receiveShadow = true;
     island.add(snowTop);
     this.content.add(island);
@@ -424,11 +438,23 @@ export class StageScene {
       this.agent.position.copy(this.targetAgentPosition);
       this.agent.rotation.y = this.targetAgentYaw;
       this.agentInitialized = true;
+      this.agentAnimation?.update(dt);
       return;
     }
     const blend = 1 - Math.exp(-dt * 10);
     this.agent.position.lerp(this.targetAgentPosition, blend);
     this.agent.rotation.y = dampAngle(this.agent.rotation.y, this.targetAgentYaw, 10, dt);
+    if (this.agentAnimation !== null) {
+      const distance = this.agent.position.distanceTo(this.targetAgentPosition);
+      const yawDelta = Math.abs(
+        THREE.MathUtils.euclideanModulo(this.targetAgentYaw - this.agent.rotation.y + Math.PI, TAU) - Math.PI,
+      );
+      if (this.pendingIdle && distance < 0.02 && yawDelta < 0.03) {
+        this.agentAnimation.setState("idle");
+        this.pendingIdle = false;
+      }
+      this.agentAnimation.update(dt);
+    }
   }
 
   private updateSnow(dt: number): void {
