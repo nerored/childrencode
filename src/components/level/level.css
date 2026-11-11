@@ -1177,164 +1177,567 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- Block editor ---------- */
+/* ---------- Blueprint editor ---------- */
 
-.block-editor {
-  --block-rail: 0.22rem;
-  --block-radius: var(--level-radius-md);
-  --block-notch-w: 1.5rem;
-  --block-notch-h: 0.36rem;
-  --block-notch-x: calc(var(--level-space-3) + var(--block-rail) + var(--level-space-2));
-  --block-socket-h: 0.7rem;
-  --block-snap-h: 1.6rem;
+/*
+ * Puzzle-block editor. The palette and the canvas share one shape language:
+ * a white face washed with the command's tint, a solid accent rail on the
+ * left, a notched top edge and a protruding bottom tab. The start hat is the
+ * only gold block and carries a fixed lock badge instead of controls.
+ */
+.blueprint-editor {
+  --block-rail: 0.375rem;
+  --block-radius: 0.625rem;
+  --block-notch-w: 1.75rem;
+  --block-notch-h: 0.5rem;
+  --block-notch-x: var(--bp-connector-x);
+  --block-socket-h: 0.85rem;
+  --block-snap-h: 1.8rem;
   --block-body: var(--level-cloud);
   --block-body-deep: var(--level-surface-sunken);
+  --bp-connector-x: 1.75rem;
+  --bp-board: var(--level-bg-deep);
+  --bp-dot: var(--level-line-strong);
 
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: var(--level-space-3);
+  min-width: 0;
 }
 
-.block-hat {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--level-space-2);
-  padding: var(--level-space-3) var(--level-space-4);
-  border: 1px solid var(--level-gold);
-  border-radius: var(--level-radius-sm);
-  background: linear-gradient(135deg, var(--level-gold-pale), var(--level-gold));
-  color: var(--level-ink-strong);
-  font-size: var(--level-text-sm);
-  font-weight: 800;
+/* ---------- Palette ---------- */
+
+.block-palette-panel {
+  padding: var(--level-space-3);
+  border: 1px solid var(--level-line);
+  border-radius: var(--level-radius-md);
+  background: linear-gradient(180deg, var(--level-panel-top), var(--level-panel-bottom));
   box-shadow:
-    0 0.22rem 0 var(--level-gold-shadow),
+    inset 0 1px 0 var(--level-highlight),
     var(--level-shadow-sm);
 }
 
-.block-hat__dot {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  background: var(--level-gold-deep);
-  box-shadow: 0 0 0 0.22rem var(--level-gold-soft);
+.block-palette-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--level-space-1) var(--level-space-3);
+  margin-bottom: var(--level-space-2);
 }
 
-.block-hat__text {
-  letter-spacing: 0.02em;
+.block-palette-panel__title {
+  margin: 0;
+  color: var(--level-ink-strong);
+  font-size: var(--level-text-xs);
+  font-weight: 800;
+  letter-spacing: 0.14em;
 }
 
-.block-hat__spark {
-  margin-left: auto;
-  color: var(--level-gold-deep);
-  font-size: var(--level-text-sm);
-  opacity: 0.7;
+.block-palette-panel__hint {
+  margin: 0;
+  color: var(--level-muted);
+  font-size: var(--level-text-2xs);
 }
 
-/* The start event is the head of the stack; its tab plugs into the first socket. */
-.block-hat::after {
+.block-palette-panel__list {
+  display: flex;
+  gap: var(--level-space-3);
+  margin: 0 -0.5rem;
+  padding: 0.5rem 0.5rem 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--level-line-strong) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.block-palette-panel__list::-webkit-scrollbar {
+  height: 6px;
+}
+
+.block-palette-panel__list::-webkit-scrollbar-thumb {
+  border-radius: var(--level-radius-pill);
+  background: var(--level-line-strong);
+}
+
+.palette-block {
+  --block-accent: var(--level-accent-strong);
+  --block-tint: var(--level-accent-soft);
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 150px;
+  align-items: center;
+  gap: var(--level-space-2);
+  width: 150px;
+  height: 46px;
+  padding: 0 var(--level-space-3);
+  border: 1px solid var(--block-accent);
+  border-left: 0.375rem solid var(--block-accent);
+  border-radius: var(--block-radius);
+  background-color: var(--level-cloud);
+  background-image: linear-gradient(180deg, transparent 0%, var(--block-tint) 100%);
+  color: var(--level-ink-strong);
+  font: inherit;
+  font-size: var(--level-text-xs);
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: left;
+  cursor: grab;
+  touch-action: pan-x;
+  scroll-snap-align: start;
+  box-shadow:
+    0 3px 0 var(--block-accent),
+    inset 0 1px 0 var(--level-highlight);
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease,
+    background-color 0.16s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* The global button cursor is `pointer`; palette samples and handles drag. */
+button.palette-block:not(:disabled) {
+  cursor: grab;
+}
+
+/* Open notch on the top edge: the previous block's tab would sit here. */
+.palette-block::before {
   content: "";
   position: absolute;
-  left: var(--block-notch-x);
-  bottom: calc(-1 * var(--block-notch-h));
-  z-index: 2;
-  width: var(--block-notch-w);
-  height: var(--block-notch-h);
-  border: 1px solid var(--level-gold);
-  border-top: 0;
-  border-radius: 0 0 var(--level-radius-xs) var(--level-radius-xs);
-  background: var(--level-gold-pale);
+  top: -1px;
+  left: 26px;
+  z-index: 1;
+  width: 22px;
+  height: 7px;
+  border-inline: 1px solid var(--block-accent);
+  border-bottom: 1px solid var(--block-accent);
+  border-radius: 0 0 0.375rem 0.375rem;
+  background: var(--level-cloud);
   pointer-events: none;
 }
 
-.block-palette {
-  padding: var(--level-space-3);
-  border: 1px dashed var(--level-line-strong);
-  border-radius: var(--level-radius-md);
-  background: var(--level-surface-sunken);
+/* Protruding bottom tab: this is what plugs into the next slot. */
+.palette-block::after {
+  content: "";
+  position: absolute;
+  left: 26px;
+  bottom: -7px;
+  z-index: 2;
+  width: 22px;
+  height: 7px;
+  border: 1px solid var(--block-accent);
+  border-top: 0;
+  border-radius: 0 0 0.375rem 0.375rem;
+  background: var(--level-cloud);
+  pointer-events: none;
 }
 
-.block-editor > .block-palette {
-  margin-top: var(--level-space-4);
+.palette-block--forward {
+  --block-accent: var(--level-accent-strong);
+  --block-tint: var(--level-accent-soft);
 }
 
-.block-palette__title {
-  margin: 0 0 var(--level-space-2);
+.palette-block--turn {
+  --block-accent: var(--level-sky-deep);
+  --block-tint: var(--level-sky-soft);
+}
+
+.palette-block--repeat {
+  --block-accent: var(--level-gold-deep);
+  --block-tint: var(--level-gold-soft);
+}
+
+.palette-block--if {
+  --block-accent: var(--level-coral-deep);
+  --block-tint: var(--level-coral-soft);
+}
+
+.palette-block--setVar,
+.palette-block--changeVar {
+  --block-accent: var(--level-slate-deep);
+  --block-tint: var(--level-slate-soft);
+}
+
+.palette-block:hover {
+  transform: translateY(-2px);
+  border-color: var(--block-accent);
+  box-shadow:
+    0 5px 0 var(--block-accent),
+    0 10px 20px var(--level-inset-shadow),
+    inset 0 1px 0 var(--level-highlight);
+}
+
+.palette-block:focus-visible {
+  outline: 3px solid var(--block-accent);
+  outline-offset: 2px;
+  transform: translateY(-2px);
+}
+
+button.palette-block:active:not(:disabled) {
+  transform: none;
+  cursor: grabbing;
+  box-shadow:
+    0 1px 0 var(--block-accent),
+    inset 0 1px 0 var(--level-highlight);
+}
+
+.block-editor--dragging button.palette-block:not(:disabled) {
+  cursor: grabbing;
+}
+
+.palette-block__glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 0.375rem;
+  background: var(--block-tint);
+  color: var(--block-accent);
+  font-size: var(--level-text-xs);
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px var(--level-line-faint);
+}
+
+.palette-block__label {
+  overflow: hidden;
+  color: var(--level-ink-strong);
+  font-size: var(--level-text-xs);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Canvas toolbar ---------- */
+
+.blueprint-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--level-space-2);
+}
+
+.blueprint-toolbar__label {
+  margin-right: auto;
   color: var(--level-muted);
   font-size: var(--level-text-xs);
   font-weight: 700;
   letter-spacing: 0.14em;
 }
 
-.block-palette__grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--level-space-2);
-}
-
-.block-palette__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--level-space-1);
-  min-height: 2.1rem;
-  padding: 0 var(--level-space-3);
-  border: 1px solid var(--level-line);
-  border-radius: var(--level-radius-pill);
+.blueprint-zoom {
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--level-touch);
+  height: var(--level-touch);
+  padding: 0 var(--level-space-2);
+  border: 1px solid var(--level-line-strong);
+  border-radius: var(--level-radius-sm);
   background: var(--level-cloud);
-  color: var(--level-ink);
+  color: var(--level-ink-strong);
   font: inherit;
-  font-size: var(--level-text-xs);
-  font-weight: 700;
+  font-size: var(--level-text-md);
+  font-weight: 800;
+  line-height: 1;
   cursor: pointer;
+  box-shadow: 0 2px 0 var(--level-line-faint);
   transition:
-    transform 0.16s ease,
     background-color 0.16s ease,
-    border-color 0.16s ease;
+    border-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease;
 }
 
-.block-palette__chip:hover {
+.blueprint-zoom--out,
+.blueprint-zoom--in {
+  font-size: var(--level-text-lg);
+}
+
+.blueprint-zoom--reset {
+  width: auto;
+  min-width: 3.25rem;
+  padding: 0 var(--level-space-3);
+  font-size: var(--level-text-xs);
+}
+
+.blueprint-zoom:hover:not(:disabled) {
   border-color: var(--level-accent);
   background: var(--level-accent-soft);
-  transform: translateY(-1px);
-}
-
-.block-palette__glyph {
-  display: grid;
-  place-items: center;
-  width: 1.15rem;
-  height: 1.15rem;
-  border-radius: 50%;
-  background: var(--level-accent-pale);
   color: var(--level-accent-strong);
+}
+
+.blueprint-zoom:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.blueprint-zoom:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.blueprint-zoom__value {
+  min-width: 3.25rem;
+  padding: 0 var(--level-space-2);
+  color: var(--level-muted);
+  font-family: var(--level-font-mono);
+  font-size: var(--level-text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--level-touch);
+  text-align: center;
+}
+
+/* ---------- Canvas viewport ---------- */
+
+.blueprint-viewport {
+  position: relative;
+  height: clamp(320px, 46vh, 560px);
+  overflow: hidden;
+  border: 1px solid var(--level-line-strong);
+  border-radius: var(--level-radius-lg);
+  background-color: var(--bp-board);
+  background-image:
+    radial-gradient(ellipse at 16% 0%, var(--level-highlight), transparent 58%),
+    radial-gradient(circle, var(--bp-dot) 1px, transparent 1.1px);
+  background-position: center, 0 0;
+  background-size: auto, 20px 20px;
+  background-repeat: no-repeat, repeat;
+  box-shadow:
+    inset 0 2px 18px var(--level-inset-shadow),
+    inset 0 0 0 1px var(--level-highlight);
+  cursor: grab;
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.blueprint-viewport--panning,
+.blueprint-viewport--dragging {
+  cursor: grabbing;
+}
+
+.blueprint-viewport--dragging .block,
+.blueprint-viewport--dragging .block__head,
+.blueprint-viewport--dragging .block__content,
+.blueprint-viewport--dragging .block__controls,
+.blueprint-viewport--dragging .block__drag-handle,
+.blueprint-viewport--dragging .icon-button,
+.blueprint-viewport--dragging .blueprint-start {
+  cursor: grabbing;
+}
+
+/* The transformed layer: JS owns `transform`; CSS only fixes the origin. */
+.blueprint-scene {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 40px 48px 64px;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+/* ---------- Start hat ---------- */
+
+.blueprint-start {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--level-space-2);
+  min-width: 232px;
+  min-height: 64px;
+  padding: var(--level-space-3) var(--level-space-4) var(--level-space-3) 1.25rem;
+  border: 1px solid var(--level-gold);
+  border-radius: 1rem 1rem var(--block-radius) var(--block-radius);
+  background-color: var(--level-cloud);
+  background-image:
+    linear-gradient(180deg, var(--level-gold-soft-strong) 0, transparent 38%),
+    linear-gradient(180deg, transparent 0, var(--level-gold-pale) 100%);
+  color: var(--level-ink-strong);
+  box-shadow:
+    0 4px 0 var(--level-gold-shadow),
+    0 10px 22px var(--level-inset-shadow),
+    inset 0 1px 0 var(--level-highlight);
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The hat's bottom tab plugs into the root list's index-0 socket. It is
+ * placed from the same 28px connector line as every block notch. */
+.blueprint-start::after {
+  content: "";
+  position: absolute;
+  left: var(--bp-connector-x);
+  bottom: calc(-1 * var(--block-notch-h));
+  z-index: 2;
+  width: var(--block-notch-w);
+  height: var(--block-notch-h);
+  border: 1px solid var(--level-gold);
+  border-top: 0;
+  border-radius: 0 0 0.375rem 0.375rem;
+  background-color: var(--level-gold-pale);
+  background-image: linear-gradient(180deg, transparent, var(--level-gold-soft-strong));
+  pointer-events: none;
+}
+
+.blueprint-start__dot {
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--level-gold);
+  box-shadow:
+    0 0 0 4px var(--level-gold-soft),
+    inset 0 0 0 1px var(--level-gold-deep);
+}
+
+.blueprint-start__text {
+  color: var(--level-ink-strong);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.blueprint-start__spark {
+  margin-left: auto;
+  color: var(--level-gold-deep);
+  font-size: var(--level-text-md);
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.blueprint-start-lock {
+  flex: none;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--level-gold-soft-strong);
+  border-radius: var(--level-radius-pill);
+  background: var(--level-gold-soft);
+  color: var(--level-gold-deep);
   font-size: var(--level-text-2xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.block-palette--inline {
-  padding: var(--level-space-1) 0 0;
-  border: 0;
-  border-radius: 0;
+.blueprint-empty {
+  min-width: 232px;
+  max-width: 100%;
+  margin: var(--level-space-4) 0 0;
+  padding: var(--level-space-2) var(--level-space-3);
+  border: 1px dashed var(--level-line-strong);
+  border-radius: var(--block-radius);
+  background: var(--level-surface);
+  color: var(--level-muted);
+  font-size: var(--level-text-xs);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ---------- Drop slots ---------- */
+
+.drop-slot {
+  position: relative;
+  display: block;
+  height: 0;
+  min-height: 0;
+  border-radius: var(--level-radius-sm);
+  transition:
+    height 0.16s ease,
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+/* Zero-height slots still need a hit box: layout stays compact, but the strip
+ * extends 10px down over the next block's notch/padding (never its controls),
+ * so elementFromPoint resolves the slot instead of the block below it. It also
+ * covers the non-empty root start slot, which is no longer :only-child. */
+.drop-slot::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 10px;
+  z-index: 2;
   background: transparent;
+  pointer-events: auto;
 }
 
-.block-palette--inline .block-palette__grid {
-  gap: var(--level-space-1);
-}
-
-.block-palette--inline .block-palette__chip {
-  min-height: 2rem;
-  padding-inline: var(--level-space-2);
+/* An empty branch still shows a real socket to aim at. */
+.drop-slot:only-child {
+  height: var(--block-socket-h);
+  border: 1px dashed var(--level-line-strong);
+  border-radius: var(--level-radius-sm);
   background: var(--level-surface-sunken);
 }
 
-.block-palette--inline .block-palette__glyph {
-  width: 1rem;
-  height: 1rem;
+/* The root slot under the start hat: invisible until it is the only way in. */
+.drop-slot--start {
+  height: 0;
 }
+
+.drop-slot--start:only-child {
+  height: 2.5rem;
+  border: 1px dashed var(--level-accent);
+  background: var(--level-accent-pale);
+}
+
+/* Keep slot geometry stable during drags: growing a slot shifts the content
+ * under the pointer, so a lower socket would move away mid-gesture. The
+ * existing ::after hit strip carries the snap highlight instead. */
+.drop-slot--snap::after {
+  background: var(--level-accent-soft);
+  border: 2px solid var(--level-accent);
+  border-radius: var(--level-radius-sm);
+  box-shadow: 0 0 0 3px var(--level-accent-wash);
+}
+
+.drop-slot--snap::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: var(--level-space-3);
+  left: var(--level-space-3);
+  height: 2px;
+  transform: translateY(-50%);
+  border-radius: var(--level-radius-pill);
+  background: linear-gradient(90deg, var(--level-sky), var(--level-accent-strong));
+  box-shadow: 0 0 0.6rem var(--level-accent-glow);
+}
+
+/* ---------- Block stacks ---------- */
 
 .block-list-wrap {
   display: flex;
   flex-direction: column;
   gap: var(--level-space-2);
+  min-width: 0;
+}
+
+/* The root list is never narrower than the start hat it hands off from. */
+.blueprint-scene > .block-list-wrap {
+  min-width: 232px;
 }
 
 .block-list {
@@ -1351,31 +1754,23 @@
   min-width: 0;
 }
 
-.block-list__empty {
-  margin: 0;
-  padding: var(--level-space-3);
-  border: 1px dashed var(--level-line);
-  border-radius: var(--level-radius-sm);
-  color: var(--level-muted);
-  font-size: var(--level-text-xs);
-  text-align: center;
-}
+/* ---------- Blocks ---------- */
 
 .block {
   --block-accent: var(--level-accent-strong);
   --block-tint: var(--level-accent-soft);
   position: relative;
-  padding: var(--level-space-2) var(--level-space-3);
+  padding: 0.5rem var(--level-space-4) 0.5rem calc(var(--level-space-4) + var(--block-rail));
   border: 1px solid var(--level-line);
-  border-left: var(--block-rail) solid var(--block-accent);
   border-radius: 0;
-  background: linear-gradient(180deg, var(--block-body), var(--block-body-deep));
+  background-color: var(--block-body);
+  background-image: linear-gradient(180deg, transparent 0%, var(--block-tint) 100%);
   box-shadow:
-    var(--level-shadow-sm),
-    inset 0 1px 0 var(--level-highlight);
+    inset var(--block-rail) 0 0 var(--block-accent),
+    inset 0 1px 0 var(--level-highlight),
+    var(--level-shadow-sm);
 }
 
-/* Only the ends of a list are rounded so the stack reads as one blueprint. */
 .block-list__item--first .block {
   border-top-left-radius: var(--block-radius);
   border-top-right-radius: var(--block-radius);
@@ -1386,7 +1781,7 @@
   border-bottom-right-radius: var(--block-radius);
 }
 
-/* Top notch: the previous block's bottom tab drops into this cutout. */
+/* Top notch: the previous block's tab drops into this cutout. */
 .block::before {
   content: "";
   position: absolute;
@@ -1397,7 +1792,7 @@
   height: var(--block-notch-h);
   border-inline: 1px solid var(--level-line-faint);
   border-bottom: 1px solid var(--level-line);
-  border-radius: 0 0 var(--level-radius-xs) var(--level-radius-xs);
+  border-radius: 0 0 0.375rem 0.375rem;
   background: var(--block-body-deep);
   pointer-events: none;
 }
@@ -1410,10 +1805,11 @@
   z-index: 2;
   width: var(--block-notch-w);
   height: var(--block-notch-h);
-  border: 1px solid var(--level-line);
+  border: 1px solid var(--level-line-strong);
   border-top: 0;
-  border-radius: 0 0 var(--level-radius-xs) var(--level-radius-xs);
-  background: var(--block-body);
+  border-radius: 0 0 0.375rem 0.375rem;
+  background-color: var(--block-body);
+  background-image: linear-gradient(180deg, transparent, var(--block-tint));
   box-shadow: 0 2px 4px var(--level-inset-shadow);
   pointer-events: none;
   transition:
@@ -1456,6 +1852,19 @@
   --block-tint: var(--level-slate-soft);
 }
 
+.blueprint-scene .block {
+  min-width: 248px;
+}
+
+.blueprint-scene .block--repeat,
+.blueprint-scene .block--if {
+  min-width: 300px;
+}
+
+.blueprint-scene .block__head {
+  min-height: 3.75rem;
+}
+
 .block__head {
   display: flex;
   flex-wrap: wrap;
@@ -1467,11 +1876,11 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: var(--level-touch);
-  height: var(--level-touch);
+  width: 2rem;
+  height: 2rem;
   padding: 0;
   border: 1px solid var(--level-line);
-  border-radius: var(--level-radius-xs);
+  border-radius: 0.5rem;
   background: var(--level-surface-sunken);
   color: var(--level-muted);
   font-size: 1.1rem;
@@ -1487,32 +1896,37 @@
     border-color 0.16s ease;
 }
 
-.block__drag-handle:hover {
-  border-color: var(--level-line-strong);
-  background: var(--level-accent-soft);
-  color: var(--level-accent-strong);
-}
-
-.block-editor .block__drag-handle {
+button.block__drag-handle:not(:disabled) {
   cursor: grab;
 }
 
-.block__drag-handle:active {
-  background: var(--level-accent-pale);
+.block__drag-handle:hover {
+  border-color: var(--block-accent);
+  background: var(--block-tint);
+  color: var(--block-accent);
+}
+
+button.block__drag-handle:active:not(:disabled) {
   cursor: grabbing;
+}
+
+.blueprint-scene .block__drag-handle {
+  width: var(--level-touch);
+  height: var(--level-touch);
 }
 
 .block__kind {
   display: grid;
   flex: none;
   place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: var(--level-radius-xs);
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
   background: var(--block-tint);
   color: var(--block-accent);
   font-size: var(--level-text-sm);
   font-weight: 800;
+  line-height: 1;
   box-shadow:
     inset 0 1px 0 var(--level-highlight),
     0 0 0 1px var(--level-line-faint);
@@ -1520,7 +1934,7 @@
 
 .block__content {
   display: flex;
-  flex: 1 1 12rem;
+  flex: 1 1 8rem;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--level-space-2);
@@ -1529,8 +1943,8 @@
 
 .block__label {
   color: var(--level-ink);
-  font-size: var(--level-text-sm);
-  font-weight: 700;
+  font-size: var(--level-text-md);
+  font-weight: 800;
 }
 
 .block__suffix,
@@ -1541,6 +1955,7 @@
 
 .block__controls {
   display: flex;
+  align-items: center;
   gap: var(--level-space-1);
   margin-left: auto;
 }
@@ -1552,17 +1967,23 @@
   height: 2rem;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: var(--level-radius-xs);
+  border-radius: 0.5rem;
   background: transparent;
   color: var(--level-muted);
   font: inherit;
-  font-size: var(--level-text-sm);
+  font-size: var(--level-text-md);
   font-weight: 700;
   cursor: pointer;
   transition:
     background-color 0.16s ease,
     border-color 0.16s ease,
     color 0.16s ease;
+}
+
+.blueprint-scene .icon-button {
+  width: var(--level-touch);
+  height: var(--level-touch);
+  font-size: var(--level-text-lg);
 }
 
 .icon-button:hover:not(:disabled) {
@@ -1582,143 +2003,44 @@
   color: var(--level-danger);
 }
 
-/* ---------- Drag interactions ---------- */
+/* ---------- Branches (C-shaped bodies) ---------- */
 
-.block--dragging {
-  opacity: 0.45;
-  filter: saturate(0.7);
-  box-shadow: var(--level-shadow-sm);
-}
-
-.block--dragging .block__drag-handle {
-  cursor: grabbing;
-}
-
-.block-editor--dragging .block__drag-handle {
-  cursor: grabbing;
-}
-
-.block-editor--dragging {
-  cursor: grabbing;
-}
-
-.block-editor--dragging,
-.block-editor--dragging .block,
-.block-editor--dragging .block__head,
-.block-editor--dragging .block__content,
-.block-editor--dragging .block__controls,
-.block-editor--dragging .block-palette,
-.block-editor--dragging .block-palette__chip,
-.block-editor--dragging .icon-button {
-  cursor: grabbing;
-}
-
-.block-drag-ghost {
-  --block-accent: var(--level-accent-strong);
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 90;
-  display: flex;
-  align-items: center;
-  gap: var(--level-space-2);
-  max-width: min(24rem, calc(100vw - var(--level-space-5)));
-  padding: var(--level-space-2) var(--level-space-3);
-  border: 1px solid var(--level-accent);
-  border-radius: var(--level-radius-sm);
-  background: var(--level-cloud);
-  color: var(--level-ink-strong);
-  font-size: var(--level-text-sm);
-  font-weight: 700;
-  box-shadow: var(--level-ghost-shadow);
-  rotate: 1.5deg;
-  pointer-events: none;
-  opacity: 0.98;
-  will-change: transform;
-  transition:
-    rotate 0.12s ease,
-    border-color 0.12s ease,
-    background-color 0.12s ease,
-    box-shadow 0.12s ease;
-}
-
-.block-drag-ghost--snap {
-  rotate: 0deg;
-  border-color: var(--level-accent-strong);
-  background: var(--level-accent-pale);
-  box-shadow:
-    0 0 0 3px var(--level-accent-wash),
-    var(--level-ghost-shadow);
-}
-
-.block-drag-ghost__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.drop-slot {
+.blueprint-scene .block__branch {
   position: relative;
-  display: block;
-  height: 0;
-  min-height: 0;
-  border-radius: var(--level-radius-pill);
-  transition:
-    height 0.16s ease,
-    background-color 0.16s ease,
-    box-shadow 0.16s ease;
-}
-
-/* An empty branch or empty program still shows a real socket to aim at. */
-.drop-slot:only-child {
-  height: var(--block-socket-h);
-  border: 1px dashed var(--level-line-strong);
-  border-radius: var(--level-radius-xs);
-  background: var(--level-surface-sunken);
-}
-
-.drop-slot--snap {
-  height: var(--block-snap-h);
-  background: var(--level-accent-soft);
-  box-shadow:
-    inset 0 0 0 2px var(--level-accent),
-    0 0 0 3px var(--level-accent-wash);
-}
-
-.drop-slot--snap::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: var(--level-space-3);
-  left: var(--level-space-3);
-  height: 2px;
-  transform: translateY(-50%);
-  border-radius: var(--level-radius-pill);
-  background: linear-gradient(90deg, var(--level-sky), var(--level-accent-strong));
-  box-shadow: 0 0 0.6rem var(--level-accent-glow);
-}
-
-/* ---------- Block branches and fields ---------- */
-
-.block__branch {
   display: flex;
   flex-direction: column;
   gap: var(--level-space-2);
-  margin-top: var(--level-space-2);
-  padding-left: var(--level-space-3);
-  border-left: 2px solid var(--level-line);
+  margin: var(--level-space-2) 0 0 var(--level-space-2);
+  padding: var(--level-space-2) var(--level-space-2) var(--level-space-2)
+    calc(var(--level-space-3) + 0.125rem);
+  border-left: 0.625rem solid var(--block-accent);
+  border-bottom: 0.625rem solid var(--block-accent);
+  border-bottom-left-radius: 0.625rem;
+  background-color: var(--block-body);
+  background-image: linear-gradient(180deg, transparent 0%, var(--block-tint) 100%);
 }
 
-.block__branch--else {
-  border-left-color: var(--level-coral-soft);
+.blueprint-scene .block__branch--else {
+  border-left-color: var(--level-coral);
+  border-bottom-color: var(--level-coral);
+}
+
+.blueprint-scene .block__branch .block {
+  min-width: 200px;
 }
 
 .block__branch-label {
-  color: var(--level-muted);
-  font-size: var(--level-text-xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  color: var(--block-accent);
+  font-size: var(--level-text-2xs);
+  font-weight: 800;
+  letter-spacing: 0.1em;
 }
+
+.blueprint-scene .block__branch--else > .block__branch-label {
+  color: var(--level-coral-deep);
+}
+
+/* ---------- Fields ---------- */
 
 .number-field,
 .text-field,
@@ -1791,17 +2113,178 @@
   outline-offset: 1px;
 }
 
+/* ---------- Editor meta ---------- */
+
 .block-editor__meta {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--level-space-2);
-  margin-top: var(--level-space-3);
+  margin-top: 0;
   padding-top: var(--level-space-2);
   border-top: 1px solid var(--level-line-faint);
   color: var(--level-muted);
   font-size: var(--level-text-xs);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Drag interactions ---------- */
+
+.block--dragging {
+  opacity: 0.45;
+  filter: saturate(0.7);
+  box-shadow: var(--level-shadow-sm);
+}
+
+.block--dragging button.block__drag-handle:not(:disabled) {
+  cursor: grabbing;
+}
+
+.block-editor--dragging {
+  cursor: grabbing;
+}
+
+.block-editor--dragging .block,
+.block-editor--dragging .block__head,
+.block-editor--dragging .block__content,
+.block-editor--dragging .block__controls,
+.block-editor--dragging .icon-button {
+  cursor: grabbing;
+}
+
+.block-editor--dragging button.block__drag-handle:not(:disabled),
+.blueprint-viewport--dragging button.block__drag-handle:not(:disabled) {
+  cursor: grabbing;
+}
+
+/* ---------- Drag ghost ---------- */
+
+.block-drag-ghost {
+  --block-accent: var(--level-accent-strong);
+  --block-tint: var(--level-accent-soft);
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 90;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--level-space-2);
+  max-width: min(24rem, calc(100vw - var(--level-space-5)));
+  min-height: 46px;
+  padding: var(--level-space-2) var(--level-space-3);
+  border: 1px solid var(--block-accent);
+  border-left: 0.375rem solid var(--block-accent);
+  border-radius: var(--block-radius);
+  background-color: var(--level-cloud);
+  background-image: linear-gradient(180deg, transparent 0%, var(--block-tint) 100%);
+  color: var(--level-ink-strong);
+  font-size: var(--level-text-sm);
+  font-weight: 800;
+  box-shadow:
+    0 3px 0 var(--block-accent),
+    var(--level-ghost-shadow);
+  rotate: 1.5deg;
+  pointer-events: none;
+  opacity: 0.98;
+  will-change: transform;
+  transition:
+    rotate 0.12s ease,
+    border-color 0.12s ease,
+    background-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.block-drag-ghost::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 26px;
+  z-index: 1;
+  width: 22px;
+  height: 7px;
+  border-inline: 1px solid var(--block-accent);
+  border-bottom: 1px solid var(--block-accent);
+  border-radius: 0 0 0.375rem 0.375rem;
+  background: var(--level-cloud);
+  pointer-events: none;
+}
+
+.block-drag-ghost::after {
+  content: "";
+  position: absolute;
+  left: 26px;
+  bottom: -7px;
+  z-index: 2;
+  width: 22px;
+  height: 7px;
+  border: 1px solid var(--block-accent);
+  border-top: 0;
+  border-radius: 0 0 0.375rem 0.375rem;
+  background: var(--level-cloud);
+  pointer-events: none;
+}
+
+.block-drag-ghost--snap {
+  rotate: 0deg;
+  border-color: var(--level-accent-strong);
+  background: var(--level-accent-pale);
+  box-shadow:
+    0 0 0 3px var(--level-accent-wash),
+    var(--level-ghost-shadow);
+}
+
+.block-drag-ghost__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Blueprint responsive ---------- */
+
+@media (max-width: 899px) {
+  .blueprint-viewport {
+    height: 300px;
+  }
+
+  .blueprint-scene {
+    padding: 28px 28px 48px;
+  }
+}
+
+@media (max-width: 479px) {
+  .block-palette-panel {
+    padding: var(--level-space-2);
+  }
+
+  .block-palette-panel__hint {
+    display: none;
+  }
+
+  .blueprint-viewport {
+    height: 240px;
+  }
+
+  .blueprint-scene {
+    padding: 24px 24px 48px;
+  }
+
+  .blueprint-toolbar {
+    justify-content: space-between;
+  }
+
+  .blueprint-toolbar__label {
+    margin-right: 0;
+  }
+}
+
+@media (pointer: coarse) {
+  .blueprint-scene .block__drag-handle,
+  .blueprint-scene .icon-button,
+  .blueprint-zoom {
+    min-width: var(--level-touch);
+    min-height: var(--level-touch);
+  }
 }
 
 /* ---------- Python track ---------- */
@@ -2383,7 +2866,9 @@
   .block-drag-ghost,
   .level-button,
   .level-track__button,
-  .block-palette__chip,
+  .palette-block,
+  .blueprint-zoom,
+  .blueprint-start,
   .block__drag-handle,
   .icon-button {
     transition-duration: 0.01ms;

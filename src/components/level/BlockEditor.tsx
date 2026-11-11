@@ -11,6 +11,16 @@ import {
 import type { BlockAddress, ContainerPath } from "./commandTree";
 import { pickSnap } from "./blockGraph";
 import type { SnapTarget } from "./blockGraph";
+import {
+  BLUEPRINT_ZOOM_STEP,
+  DEFAULT_BLUEPRINT_VIEW,
+  MAX_BLUEPRINT_ZOOM,
+  MIN_BLUEPRINT_ZOOM,
+  WHEEL_ZOOM_SENSITIVITY,
+  panViewBy,
+  zoomViewAt,
+} from "./blueprint";
+import type { BlueprintView } from "./blueprint";
 
 export interface BlockEditorProps {
   level: LevelSpec;
@@ -20,6 +30,7 @@ export interface BlockEditorProps {
 
 interface PaletteEntry {
   key: string;
+  kind: CommandKind;
   label: string;
   glyph: string;
   create(): Command;
@@ -33,6 +44,22 @@ const KIND_GLYPH: Record<CommandKind, string> = {
   setVar: "=",
   changeVar: "+",
 };
+
+/** Pointer targets that must never start a canvas pan. */
+const PAN_IGNORE_SELECTOR = [
+  ".block",
+  ".blueprint-start",
+  ".palette-block",
+  "[data-drag-handle]",
+  "[data-drop-container]",
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "label",
+  ".blueprint-toolbar",
+  ".block-palette-panel",
+].join(", ");
 
 function describeCondition(condition: Condition): string {
   switch (condition.kind) {
@@ -63,7 +90,7 @@ function describeCommand(command: Command): string {
 }
 
 /**
- * Pointer Events only: pointerdown on a drag handle or palette chip opens a
+ * Pointer Events only: pointerdown on a drag handle or palette block opens a
  * session, pointermove drives the ghost and hit-tests slots, pointerup commits
  * the move, and pointercancel aborts it. Click/keyboard editing stays intact.
  */
@@ -86,6 +113,12 @@ interface PointerSession {
   source: DragSource;
   active: boolean;
   grabOffset: { dx: number; dy: number };
+}
+
+interface PanSession {
+  pointerId: number;
+  lastX: number;
+  lastY: number;
 }
 
 interface ActiveDrop {
@@ -221,6 +254,7 @@ function paletteFor(allowed: Set<CommandKind>): PaletteEntry[] {
   if (allowed.has("forward")) {
     entries.push({
       key: "forward",
+      kind: "forward",
       label: "前进",
       glyph: "→",
       create: () => ({ kind: "forward", steps: 1 }),
@@ -230,12 +264,14 @@ function paletteFor(allowed: Set<CommandKind>): PaletteEntry[] {
     entries.push(
       {
         key: "turn-left",
+        kind: "turn",
         label: "左转",
         glyph: "↰",
         create: () => ({ kind: "turn", direction: "left" }),
       },
       {
         key: "turn-right",
+        kind: "turn",
         label: "右转",
         glyph: "↱",
         create: () => ({ kind: "turn", direction: "right" }),
@@ -245,6 +281,7 @@ function paletteFor(allowed: Set<CommandKind>): PaletteEntry[] {
   if (allowed.has("repeat")) {
     entries.push({
       key: "repeat",
+      kind: "repeat",
       label: "重复",
       glyph: "⟳",
       create: () => ({ kind: "repeat", times: 3, body: [] }),
@@ -253,6 +290,7 @@ function paletteFor(allowed: Set<CommandKind>): PaletteEntry[] {
   if (allowed.has("if")) {
     entries.push({
       key: "if",
+      kind: "if",
       label: "如果",
       glyph: "?",
       create: () => ({ kind: "if", condition: { kind: "pathAhead" }, then: [] }),
@@ -261,6 +299,7 @@ function paletteFor(allowed: Set<CommandKind>): PaletteEntry[] {
   if (allowed.has("setVar")) {
     entries.push({
       key: "setVar",
+      kind: "setVar",
       label: "设置变量",
       glyph: "=",
       create: () => ({ kind: "setVar", name: "变量", value: 0 }),
@@ -269,6 +308,7 @@ function paletteFor(allowed: Set<CommandKind>): PaletteEntry[] {
   if (allowed.has("changeVar")) {
     entries.push({
       key: "changeVar",
+      kind: "changeVar",
       label: "变量增加",
       glyph: "+",
       create: () => ({ kind: "changeVar", name: "变量", delta: 1 }),
@@ -373,29 +413,29 @@ function NameField({ label, value, onChange }: NameFieldProps) {
   );
 }
 
-interface PaletteProps {
+interface BlockPaletteProps {
   entries: PaletteEntry[];
   onAdd(entry: PaletteEntry): void;
   drag: DragApi;
-  compact?: boolean;
 }
 
-function Palette({ entries, onAdd, drag, compact = false }: PaletteProps) {
-  if (entries.length === 0) {
-    return null;
-  }
-
+/** The single selection area: puzzle-shaped samples above the canvas. */
+function BlockPalette({ entries, onAdd, drag }: BlockPaletteProps) {
   return (
-    <div className={`block-palette${compact ? " block-palette--inline" : ""}`}>
-      {!compact && <p className="block-palette__title">指令栏</p>}
-      <div className="block-palette__grid">
+    <div className="block-palette-panel" role="group" aria-label="积木指令栏">
+      <div className="block-palette-panel__head">
+        <p className="block-palette-panel__title">指令积木</p>
+        <p className="block-palette-panel__hint">拖到画布，或点击追加到末尾</p>
+      </div>
+      <div className="block-palette-panel__list" role="list">
         {entries.map((entry) => (
           <button
             key={entry.key}
             type="button"
-            className="block-palette__chip"
+            role="listitem"
+            className={`palette-block palette-block--${entry.kind}`}
+            data-palette-key={entry.key}
             draggable={false}
-            style={{ touchAction: "none" }}
             onDragStart={(event) => event.preventDefault()}
             onPointerDown={(event) => drag.startPalette(event, entry)}
             onPointerMove={drag.move}
@@ -406,15 +446,67 @@ function Palette({ entries, onAdd, drag, compact = false }: PaletteProps) {
                 onAdd(entry);
               }
             }}
-            aria-label={`添加指令：${entry.label}。也可以拖到目标空位插入。`}
+            aria-label={`添加指令：${entry.label}。也可以拖到画布空位插入。`}
           >
-            <span className="block-palette__glyph" aria-hidden="true">
+            <span className="palette-block__glyph" aria-hidden="true">
               {entry.glyph}
             </span>
-            {entry.label}
+            <span className="palette-block__label">{entry.label}</span>
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+interface BlueprintToolbarProps {
+  view: BlueprintView;
+  onZoomIn(): void;
+  onZoomOut(): void;
+  onReset(): void;
+}
+
+function BlueprintToolbar({
+  view,
+  onZoomIn,
+  onZoomOut,
+  onReset,
+}: BlueprintToolbarProps) {
+  const atMin = view.zoom <= MIN_BLUEPRINT_ZOOM + 1e-6;
+  const atMax = view.zoom >= MAX_BLUEPRINT_ZOOM - 1e-6;
+
+  return (
+    <div className="blueprint-toolbar" role="toolbar" aria-label="画布缩放">
+      <span className="blueprint-toolbar__label">蓝图</span>
+      <button
+        type="button"
+        className="blueprint-zoom blueprint-zoom--out"
+        aria-label="缩小画布"
+        onClick={onZoomOut}
+        disabled={atMin}
+      >
+        −
+      </button>
+      <output className="blueprint-zoom__value" aria-live="polite">
+        {Math.round(view.zoom * 100)}%
+      </output>
+      <button
+        type="button"
+        className="blueprint-zoom blueprint-zoom--in"
+        aria-label="放大画布"
+        onClick={onZoomIn}
+        disabled={atMax}
+      >
+        +
+      </button>
+      <button
+        type="button"
+        className="blueprint-zoom blueprint-zoom--reset"
+        aria-label="重置画布视图"
+        onClick={onReset}
+      >
+        重置
+      </button>
     </div>
   );
 }
@@ -570,14 +662,23 @@ interface DropSlotProps {
   container: ContainerPath;
   index: number;
   snapKey: string | null;
+  start?: boolean;
 }
 
 /** A real list item that accepts a drop; it is never display:none. */
-function DropSlot({ container, index, snapKey }: DropSlotProps) {
+function DropSlot({ container, index, snapKey, start = false }: DropSlotProps) {
   const isSnapped = snapKey === slotKey(container, index);
+  const className = [
+    "drop-slot",
+    start ? "drop-slot--start" : "",
+    isSnapped ? "drop-slot--snap" : "",
+  ]
+    .filter((value) => value.length > 0)
+    .join(" ");
+
   return (
     <li
-      className={`drop-slot${isSnapped ? " drop-slot--snap" : ""}`}
+      className={className}
       data-drop-container={JSON.stringify(container)}
       data-drop-index={index}
       aria-hidden="true"
@@ -588,13 +689,11 @@ function DropSlot({ container, index, snapKey }: DropSlotProps) {
 interface BlockListProps {
   commands: Command[];
   onChange(commands: Command[]): void;
-  allowed: Set<CommandKind>;
-  palette: PaletteEntry[];
   label: string;
-  depth: number;
   container: ContainerPath;
   drag: DragApi;
-  showPalette?: boolean;
+  start?: boolean;
+  emptyHint?: string;
   onRemove(address: BlockAddress): void;
   onMoveToSlot(from: BlockAddress, toIndex: number): void;
 }
@@ -602,18 +701,14 @@ interface BlockListProps {
 function BlockList({
   commands,
   onChange,
-  allowed,
-  palette,
   label,
-  depth,
   container,
   drag,
-  showPalette = true,
+  start = false,
+  emptyHint,
   onRemove,
   onMoveToSlot,
 }: BlockListProps) {
-  const add = (entry: PaletteEntry) => onChange([...commands, entry.create()]);
-
   return (
     <div className="block-list-wrap">
       <ol
@@ -629,6 +724,7 @@ function BlockList({
                 container={container}
                 index={index}
                 snapKey={drag.snapKey}
+                start={start && index === 0}
               />
               <li
                 className={`block-list__item${index === 0 ? " block-list__item--first" : ""}${index === commands.length - 1 ? " block-list__item--last" : ""}`}
@@ -637,10 +733,7 @@ function BlockList({
                 <BlockCard
                   command={command}
                   address={address}
-                  allowed={allowed}
-                  palette={palette}
                   drag={drag}
-                  depth={depth}
                   label={`${describeCommand(command)}（第 ${index + 1} 条）`}
                   dragging={drag.draggingKey === addressKey(address)}
                   onChange={(next) => onChange(replaceAt(commands, index, next))}
@@ -661,14 +754,17 @@ function BlockList({
             </Fragment>
           );
         })}
-        <DropSlot container={container} index={commands.length} snapKey={drag.snapKey} />
+        <DropSlot
+          container={container}
+          index={commands.length}
+          snapKey={drag.snapKey}
+          start={start && commands.length === 0}
+        />
       </ol>
 
-      {commands.length === 0 && (
-        <p className="block-list__empty">还没有指令，从下方选择指令添加。</p>
+      {commands.length === 0 && emptyHint !== undefined && (
+        <p className="blueprint-empty">{emptyHint}</p>
       )}
-
-      {showPalette && <Palette entries={palette} onAdd={add} drag={drag} compact />}
     </div>
   );
 }
@@ -676,10 +772,7 @@ function BlockList({
 interface BlockCardProps {
   command: Command;
   address: BlockAddress;
-  allowed: Set<CommandKind>;
-  palette: PaletteEntry[];
   drag: DragApi;
-  depth: number;
   label: string;
   dragging: boolean;
   onChange(command: Command): void;
@@ -692,10 +785,7 @@ interface BlockCardProps {
 function BlockCard({
   command,
   address,
-  allowed,
-  palette,
   drag,
-  depth,
   label,
   dragging,
   onChange,
@@ -772,11 +862,8 @@ function BlockCard({
           <BlockList
             commands={command.body}
             onChange={(body) => onChange({ ...command, body })}
-            allowed={allowed}
-            palette={palette}
             drag={drag}
             label="重复体内的指令"
-            depth={depth + 1}
             container={bodyContainer}
             onRemove={onRemove}
             onMoveToSlot={onMoveToSlot}
@@ -791,11 +878,8 @@ function BlockCard({
             <BlockList
               commands={command.then}
               onChange={(then) => onChange({ ...command, then })}
-              allowed={allowed}
-              palette={palette}
               drag={drag}
               label="条件成立时执行的指令"
-              depth={depth + 1}
               container={thenContainer}
               onRemove={onRemove}
               onMoveToSlot={onMoveToSlot}
@@ -806,11 +890,8 @@ function BlockCard({
             <BlockList
               commands={command.else ?? []}
               onChange={(next) => onChange(withElseBranch(command, next))}
-              allowed={allowed}
-              palette={palette}
               drag={drag}
               label="条件不成立时执行的指令"
-              depth={depth + 1}
               container={elseContainer}
               onRemove={onRemove}
               onMoveToSlot={onMoveToSlot}
@@ -828,10 +909,10 @@ function BlockCard({
 }
 
 /**
- * Structured, fully controlled block editor. The hat block is fixed; every
+ * Structured, fully controlled block editor. The start hat is fixed; every
  * other command is limited by the level's allowed command kinds and can be
- * nested inside repeat and if bodies. Blocks and palette chips can be dragged
- * with a pointer; every action also has a keyboard/click path.
+ * nested inside repeat and if bodies. The palette appends or drags new blocks;
+ * the canvas pans on empty space and zooms around the pointer.
  */
 export default function BlockEditor({ level, program, onChange }: BlockEditorProps) {
   const allowed = useMemo(() => new Set(level.allowedCommands), [level.allowedCommands]);
@@ -839,8 +920,12 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
 
   const sessionRef = useRef<PointerSession | null>(null);
   const editorRootRef = useRef<HTMLElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const panRef = useRef<PanSession | null>(null);
   const suppressClickUntilRef = useRef(0);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [view, setView] = useState<BlueprintView>(DEFAULT_BLUEPRINT_VIEW);
+  const [panning, setPanning] = useState(false);
 
   const clearSession = useCallback((session: PointerSession) => {
     if (sessionRef.current === session) {
@@ -869,6 +954,47 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [clearSession]);
+
+  useEffect(() => {
+    panRef.current = null;
+    setPanning(false);
+    setView(DEFAULT_BLUEPRINT_VIEW);
+  }, [level.id]);
+
+  // React's synthetic wheel listener is passive, so zoom needs a native one.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (viewport === null) {
+      return undefined;
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("input, textarea, select") !== null
+      ) {
+        return;
+      }
+      event.preventDefault();
+      const rect = viewport.getBoundingClientRect();
+      const point = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      };
+      const delta = event.deltaY * (event.deltaMode === 1 ? 16 : 1);
+      setView((current) =>
+        zoomViewAt(
+          current,
+          point,
+          current.zoom * Math.exp(-delta * WHEEL_ZOOM_SENSITIVITY),
+        ),
+      );
+    };
+
+    viewport.addEventListener("wheel", handleWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", handleWheel);
+  }, []);
 
   const resolveActiveDrop = (
     x: number,
@@ -936,10 +1062,15 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
     const sourceEl =
       source.kind === "block" ? target.closest<HTMLElement>(".block") : captureEl;
     const sourceRect = sourceEl?.getBoundingClientRect();
+    // Palette chips are 150x46; anchoring the ghost to the chip's top-left
+    // pushes the snap corner far from the pointer. Keep palette drags close
+    // to the pointer so every socket is reachable.
     const grabOffset =
-      sourceRect === undefined
-        ? { dx: 0, dy: 0 }
-        : { dx: sourceRect.left - event.clientX, dy: sourceRect.top - event.clientY };
+      source.kind === "palette"
+        ? { dx: -12, dy: -12 }
+        : sourceRect === undefined
+          ? { dx: 0, dy: 0 }
+          : { dx: sourceRect.left - event.clientX, dy: sourceRect.top - event.clientY };
     captureEl.setPointerCapture(event.pointerId);
     sessionRef.current = {
       pointerId: event.pointerId,
@@ -1055,6 +1186,89 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
     return false;
   };
 
+  const handlePanStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !event.isPrimary) {
+      return;
+    }
+    if (sessionRef.current !== null || drag !== null) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    if (target.closest(PAN_IGNORE_SELECTOR) !== null) {
+      return;
+    }
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panRef.current = {
+      pointerId: event.pointerId,
+      lastX: event.clientX,
+      lastY: event.clientY,
+    };
+    setPanning(true);
+  };
+
+  const handlePanMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    if (pan === null || pan.pointerId !== event.pointerId) {
+      return;
+    }
+    const dx = event.clientX - pan.lastX;
+    const dy = event.clientY - pan.lastY;
+    if (dx === 0 && dy === 0) {
+      return;
+    }
+    pan.lastX = event.clientX;
+    pan.lastY = event.clientY;
+    setView((current) => panViewBy(current, dx, dy));
+  };
+
+  const endPan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    if (pan === null || pan.pointerId !== event.pointerId) {
+      return;
+    }
+    panRef.current = null;
+    setPanning(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handlePanLostCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    if (pan !== null && pan.pointerId === event.pointerId) {
+      panRef.current = null;
+      setPanning(false);
+    }
+  };
+
+  const zoomAtViewportCenter = (next: (zoom: number) => number) => {
+    const viewport = viewportRef.current;
+    const point =
+      viewport === null
+        ? { x: 0, y: 0 }
+        : (() => {
+            const rect = viewport.getBoundingClientRect();
+            return { x: rect.width / 2, y: rect.height / 2 };
+          })();
+    setView((current) => zoomViewAt(current, point, next(current.zoom)));
+  };
+
+  const zoomIn = () =>
+    zoomAtViewportCenter((zoom) => zoom + BLUEPRINT_ZOOM_STEP);
+
+  const zoomOut = () =>
+    zoomAtViewportCenter((zoom) => zoom - BLUEPRINT_ZOOM_STEP);
+
+  const resetView = () => {
+    panRef.current = null;
+    setPanning(false);
+    setView(DEFAULT_BLUEPRINT_VIEW);
+  };
+
   const removeAt = (address: BlockAddress) => {
     const next = removeCommand(program, address);
     if (next !== program) {
@@ -1086,39 +1300,70 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
     consumeSuppressedClick,
   };
 
+  const sceneTransform = `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.zoom})`;
+
   return (
     <section
       ref={editorRootRef}
-      className={`block-editor${drag !== null ? " block-editor--dragging" : ""}`}
-      aria-label="积木指令编辑器：拖动积木左侧的手柄可移动或嵌套，拖动指令栏积木可插入任意空位；也可以用上移、下移、删除按钮操作。"
+      className={`block-editor blueprint-editor${drag !== null ? " block-editor--dragging" : ""}`}
+      aria-label="积木指令编辑器：拖动积木左侧手柄移动或嵌套，从上方指令栏拖入画布。"
     >
-      <div className="block-hat" aria-label="固定起始积木：当开始被点击">
-        <span className="block-hat__dot" aria-hidden="true" />
-        <span className="block-hat__text">当开始被点击</span>
-        <span className="block-hat__spark" aria-hidden="true">
-          ✦
-        </span>
-      </div>
-
-      <BlockList
-        commands={program}
-        onChange={onChange}
-        allowed={allowed}
-        palette={palette}
-        drag={dragApi}
-        label="程序指令"
-        depth={0}
-        container={[]}
-        showPalette={false}
-        onRemove={removeAt}
-        onMoveToSlot={moveToSlot}
-      />
-
-      <Palette
+      <BlockPalette
         entries={palette}
         onAdd={(entry) => onChange([...program, entry.create()])}
         drag={dragApi}
       />
+
+      <BlueprintToolbar
+        view={view}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onReset={resetView}
+      />
+
+      <div
+        ref={viewportRef}
+        className={`blueprint-viewport${panning ? " blueprint-viewport--panning" : ""}${drag !== null ? " blueprint-viewport--dragging" : ""}`}
+        role="group"
+        aria-label="程序画布：拖动空白处平移，滚轮缩放"
+        onPointerDown={handlePanStart}
+        onPointerMove={handlePanMove}
+        onPointerUp={endPan}
+        onPointerCancel={endPan}
+        onLostPointerCapture={handlePanLostCapture}
+      >
+        <div
+          className="blueprint-scene"
+          style={{ transform: sceneTransform, transformOrigin: "0 0" }}
+        >
+          <div
+            className="blueprint-start"
+            data-blueprint-start=""
+            aria-label="固定起始积木：当开始被点击（不可删除）"
+          >
+            <span className="blueprint-start__dot" aria-hidden="true" />
+            <span className="blueprint-start__text">当开始被点击</span>
+            <span className="blueprint-start-lock" aria-hidden="true">
+              固定
+            </span>
+            <span className="blueprint-start__spark" aria-hidden="true">
+              ✦
+            </span>
+          </div>
+
+          <BlockList
+            commands={program}
+            onChange={onChange}
+            drag={dragApi}
+            label="程序指令"
+            container={[]}
+            start
+            emptyHint="从上方拖入第一块积木"
+            onRemove={removeAt}
+            onMoveToSlot={moveToSlot}
+          />
+        </div>
+      </div>
 
       <div className="block-editor__meta">
         <span>指令节点 {countCommands(program)} 个</span>
@@ -1133,7 +1378,8 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
             top: 0,
             left: 0,
             pointerEvents: "none",
-            transform: `translate3d(${drag.ghostX}px, ${drag.ghostY}px, 0)`,
+            transform: `translate3d(${drag.ghostX}px, ${drag.ghostY}px, 0) scale(${view.zoom})`,
+            transformOrigin: "0 0",
           }}
           aria-hidden="true"
         >

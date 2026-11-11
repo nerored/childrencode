@@ -38,7 +38,9 @@ components/  --->  App.tsx  --->  state/progress.ts
 | `src/content/world.ts` | 汇总四个场景包，提供按顺序查询关卡的函数 |
 | `src/content/scenes/*.ts` | 四座岛的章节、检查点和 64 个关卡 |
 | `src/state/progress.ts` | 进度序列化、最佳星数、章节与场景门槛 |
-| `src/components/*` | 首页、世界地图、章节地图、关卡编辑器和结算面板 |
+| `src/components/*` | 首页、世界地图、章节地图、关卡页、编辑器与结算面板 |
+| `src/components/level/BlockEditor.tsx` | 积木选择栏、蓝图画布、指针拖拽与吸附 |
+| `src/components/level/blueprint.ts` | 蓝图视图模型：缩放夹取、围绕指针缩放、平移 |
 
 测试文件与对应源码同目录，使用 `bun test` 运行。
 
@@ -296,7 +298,7 @@ else:
 
 关卡校验只在测试中运行，不会在应用启动时阻塞页面。内容测试还会检查标题长度为 4 到 8 个汉字、同一检查点的两关不同名，以及关卡名在项目内唯一。
 
-`allowedCommands` 决定图形化指令栏显示哪些积木，目前没有校验它是否覆盖标准解所需的全部指令。新增关卡时要自己确认标准解里的每种指令都出现在允许列表中。
+`allowedCommands` 决定积木选择栏显示哪些积木，目前没有校验它是否覆盖标准解所需的全部指令。新增关卡时要自己确认标准解里的每种指令都出现在允许列表中。
 
 ### 6.3 新增关卡
 
@@ -385,15 +387,47 @@ type View =
 
 网格舞台是纯展示组件。它接收关卡和当前播放帧，渲染网格、道具、终点、轨迹与绝对定位的小车，不负责计时，也不参与规则判定。
 
-### 8.4 拖拽与播放
+### 8.4 蓝图编辑器与播放
 
-积木拖拽由 `commandTree.ts` 的纯函数和 `BlockEditor` 的指针会话组成。每个容器用 `data-drop-container` 标识插入位置，每块积木用 `data-drag-handle` 提供拖拽手柄；`pointermove` 通过 `elementFromPoint` 命中空位，`pointerup` 提交 `moveCommand` 或 `insertCommand`。拖入自身子树会被拒绝；点击、上移、下移与删除按钮保留为键盘替代。
+图形化轨道由 `BlockEditor.tsx` 和 `level.css` 中的 `.blueprint-editor` 作用域组成。编辑器自上而下是积木选择栏、缩放工具栏、蓝图画布，以及底部的指令节点和代码长度统计。画布上的程序仍然是同一棵 `Command[]`，引擎和评分不关心它如何显示。
+
+**积木选择栏与起始积木**
+
+`paletteFor()` 按 `level.allowedCommands` 生成选择栏条目，顺序固定为前进、左转、右转、重复、如果、设置变量、变量增加。积木按种类着色：前进用蓝色强调色，转向用天蓝色，重复用金色，条件用珊瑚色，变量用灰蓝色。选择栏只有一行，窄屏时横向滚动。
+
+点击条目会调用 `entry.create()`，把新指令追加到根列表末尾。按住条目会开启一次指针拖拽，拖到画布插槽后调用 `insertCommand()`，新积木直接落在目标位置。
+
+“当开始被点击”不存于 `program`，也不属于任何 `ContainerPath`。它是画布顶部的固定事件积木，只有底部连接口，没有删除按钮，也不能拖动，只作为程序起点。根列表索引 0 的插槽带 `drop-slot--start`，是第一条指令的入口；程序为空时，插槽下方显示“从上方拖入第一块积木”。
+
+**连接、吸附与编辑**
+
+指令树在画布上摊平成若干竖向堆叠：根列表、`repeat.body`、`if.then` 和 `if.else` 各是一段堆叠。每块积木顶部有凹槽接收上一块，底部有凸起接入下一块；`repeat` 和 `if` 的分支画成 C 形，`if` 的 `else` 分支使用珊瑚色描边。
+
+可放置位置只有实际渲染出的 `.drop-slot`，由 `data-drop-container`（JSON 形式的 `ContainerPath`）和 `data-drop-index` 标识。这里没有自由连线，插槽之外的区域不接受积木。起始积木不参与命中测试，它下方的插槽才是真正的落点。
+
+拖拽会话从 `pointerdown` 开始，指针移动超过 5 px 才激活。`collectSockets()` 读取所有可见插槽的 `getBoundingClientRect()`，`pickSnap()` 以 44 px 为半径，在指针加抓取偏移附近挑选最近的插槽；命中后幽灵块对齐插槽，插槽高亮。插槽矩形已经包含画布的平移和缩放，所以任意缩放级别下的命中判断都不需要额外换算。
+
+`pointerup` 时优先使用吸附结果，否则用 `elementFromPoint()` 查找指针下的插槽。积木来源调用 `moveCommand()`，选择栏来源调用 `insertCommand()`。拖进自身子树、放回原位或路径非法时，这两个纯函数返回原树，编辑器不会产生多余更新。
+
+点击追加以及上移、下移、删除按钮和参数输入控件始终可用，键盘与辅助技术可以直接操作它们。`Escape` 取消进行中的拖拽；数字输入框里按 `Escape` 放弃本次编辑，按 `Enter` 提交。
+
+**平移与缩放**
+
+画布视图是 `BlueprintView { x, y, zoom }`，定义在纯模块 `blueprint.ts` 中。该模块不依赖 React、DOM 或存储。场景层使用 `translate3d(x, y, 0) scale(zoom)` 和 `transform-origin: 0 0`，屏幕坐标满足 `screen = view.x + local * view.zoom`。
+
+缩放范围是 0.6 到 1.6，默认视图为 `{ x: 28, y: 20, zoom: 1 }`。`clampZoom()` 把越界值夹到边界，非有限值回退到 1。`zoomViewAt()` 先夹取目标缩放，再按比例反算平移，使指针下的场景点保持不动。`panViewBy()` 只累加平移量，保留缩放，两者都返回新对象。
+
+在画布空白处按下并拖动会平移，平移没有边界限制。指针捕获让拖动移出画布后仍能继续，松开或取消时结束。按在积木、起始积木、插槽、按钮或输入框上不会开始平移。
+
+滚轮缩放使用原生非 passive 监听器，因此可以阻止页面滚动。`deltaMode === 1` 时先把 delta 乘以 16，再按 `WHEEL_ZOOM_SENSITIVITY` 计算新缩放并调用 `zoomViewAt()`。指针位于输入框、文本域或下拉框时不缩放。工具栏的缩小与放大按钮每次改变 `BLUEPRINT_ZOOM_STEP`（0.2），围绕画布中心缩放，到达 0.6 或 1.6 时对应按钮禁用；“重置”回到默认视图。工具栏的百分数由 `Math.round(zoom * 100)` 得到，切换关卡时视图自动复位。
+
+**播放**
 
 运行时 `LevelScreen` 先调用 `simulate()` 和 `scoreRun()`，再由 `playback.ts` 的 `buildPlaybackFrames()` 从 `trace` 生成 `StageFrame[]`。`GridStage` 只渲染当前帧，小车的绝对定位由 `--agent-x` / `--agent-y` 驱动 CSS transition；每 280ms 推进一帧，末帧后 240ms 打开结算面板，“跳过播放”直接到末帧。
 
 ## 9. 测试
 
-当前有 11 个测试文件、159 个用例，全部通过 `bun test` 运行：
+当前有 14 个测试文件、185 个用例，全部通过 `bun test` 运行：
 
 | 文件 | 覆盖内容 |
 | --- | --- |
@@ -402,10 +436,13 @@ type View =
 | `src/engine/parse.test.ts` | 各类语句、嵌套、注释、缩进错误、行号错误、格式化往返 |
 | `src/engine/score.test.ts` | 代码长度、三星组合、失败运行 |
 | `src/engine/validate.test.ts` | 单关字段、标准解、par 一致性、可达性、场景结构 |
+| `src/engine/water.test.ts` | 冰道判定、水面阻挡、水面不计步 |
 | `src/content/levels.test.ts` | 64 关全部可解且三星，标题规则，命名边界 |
 | `src/content/world.test.ts` | 世界层级、唯一 id、查询顺序、完整性 |
 | `src/state/progress.test.ts` | 存储容错、最佳星数、章节与场景上限、解锁 |
 | `src/state/unlock.test.ts` | 15/24 与 29/48 门槛、顺序解锁、下一关、重置 |
+| `src/components/level/blockGraph.test.ts` | 吸附目标选择、44 px 磁吸半径、就近插槽、方向偏好 |
+| `src/components/level/blueprint.test.ts` | 缩放夹取、围绕指针缩放、平移、默认视图与不可变返回 |
 | `src/components/level/commandTree.test.ts` | 拖拽路径解析、插入/删除/移动、嵌套与子树保护 |
 | `src/components/level/playback.test.ts` | 起始帧、逐帧轨迹、收集进度、失败与空轨迹 |
 
@@ -437,7 +474,8 @@ bun run verify     # typecheck、test、build 依次执行
 ## 11. 已知限制
 
 - 舞台是 CSS 绘制的 2.5D 网格，不是 3D 场景，也没有 WebGL 渲染。
-- 图形化编辑器是自建的结构化 React 组件，支持指针拖拽重排与嵌套，也保留点击和上下移动按钮；它不是 Blockly，不兼容 Scratch 或 Blockly 的积木格式。
+- 图形化编辑器是自建的结构化 React 组件，使用积木选择栏和可平移缩放的蓝图画布，支持指针拖拽重排、嵌套与插槽吸附，也保留点击和上下移动按钮；它不是 Blockly，不兼容 Scratch 或 Blockly 的积木格式。
+- 画布的平移没有边界限制，平移和缩放状态不写入进度，切换关卡或刷新页面后回到默认视图。
 - 页面主题为天蓝/白云浅色风格，颜色由 CSS 变量控制，不依赖图片素材。
 - Python 轨道是受限 DSL，由正则和缩进解析器处理，不执行真实 Python 代码。
 - 图形化和 Python 两条轨道已经实现。C++ 和 AI 关卡没有实现，只在研究报告中列为后续路线。
@@ -445,4 +483,4 @@ bun run verify     # typecheck、test、build 依次执行
 - 没有可视化的关卡编辑器。新增内容要直接改 TypeScript 场景包，并依靠测试校验。
 - 视图状态不写入 URL，刷新页面会回到首页。
 - 图形化变量名允许非 ASCII 字符，切到 Python 轨道运行时需要改成合法标识符。
-- 没有浏览器端到端测试，真实页面上的布局和交互仍需要人工检查。
+- 蓝图视图模型有单元测试，但指针拖拽、平移和缩放仍依赖浏览器人工检查。
