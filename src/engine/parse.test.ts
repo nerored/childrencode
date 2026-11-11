@@ -25,6 +25,15 @@ describe("parseTextProgram", () => {
     ]);
   });
 
+  test("parses a backward move without losing its direction", () => {
+    const result = parseTextProgram("coder.backward(2)");
+
+    expect(result.error).toBeUndefined();
+    expect(result.program).toEqual([
+      { kind: "forward", steps: 2, direction: "backward" },
+    ]);
+  });
+
   test("ignores blank lines, comments, and trailing comments", () => {
     const result = parseTextProgram(
       ["// move east", "", "coder.forward(1) // one step", "   ", "coder.turnRight()", "// done"].join("\n"),
@@ -120,6 +129,7 @@ describe("parseTextProgram", () => {
   test("round-trips formatTextProgram output", () => {
     const program: Command[] = [
       { kind: "forward", steps: 3 },
+      { kind: "forward", steps: 2, direction: "backward" },
       { kind: "turn", direction: "left" },
       {
         kind: "repeat",

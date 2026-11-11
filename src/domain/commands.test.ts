@@ -5,6 +5,7 @@ import {
   countCommands,
   formatTextProgram,
   isCommandKind,
+  oppositeDirection,
   stepPoint,
   turnDirection,
 } from "./commands";
@@ -34,6 +35,15 @@ describe("turnDirection", () => {
     expect(turnDirection("east", "right")).toBe("south");
     expect(turnDirection("south", "right")).toBe("west");
     expect(turnDirection("west", "right")).toBe("north");
+  });
+});
+
+describe("oppositeDirection", () => {
+  test("returns the heading directly behind each direction", () => {
+    expect(oppositeDirection("north")).toBe("south");
+    expect(oppositeDirection("east")).toBe("west");
+    expect(oppositeDirection("south")).toBe("north");
+    expect(oppositeDirection("west")).toBe("east");
   });
 });
 
@@ -184,6 +194,12 @@ describe("formatTextProgram", () => {
         "    coder.forward(1)",
       ].join("\n"),
     );
+  });
+
+  test("renders a backward move when the command carries the direction", () => {
+    expect(
+      formatTextProgram([{ kind: "forward", steps: 2, direction: "backward" }]),
+    ).toBe("coder.backward(2)");
   });
 
   test("returns an empty string for an empty program", () => {

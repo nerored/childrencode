@@ -17,6 +17,11 @@ export function turnDirection(direction: Direction, turn: "left" | "right"): Dir
   return TURN_ORDER[(index + offset + TURN_ORDER.length) % TURN_ORDER.length];
 }
 
+/** Return the heading directly behind `direction`. */
+export function oppositeDirection(direction: Direction): Direction {
+  return TURN_ORDER[(TURN_ORDER.indexOf(direction) + 2) % TURN_ORDER.length];
+}
+
 /** Return the adjacent cell one step in the given direction. */
 export function stepPoint(point: Point, direction: Direction): Point {
   const { dx, dy } = DIRECTIONS[direction];
@@ -80,7 +85,9 @@ function formatCommands(commands: Command[], depth: number): string[] {
   for (const command of commands) {
     switch (command.kind) {
       case "forward":
-        lines.push(`${indent}coder.forward(${command.steps})`);
+        lines.push(
+          `${indent}coder.${command.direction === "backward" ? "backward" : "forward"}(${command.steps})`,
+        );
         break;
       case "turn":
         lines.push(`${indent}coder.${command.direction === "left" ? "turnLeft" : "turnRight"}()`);

@@ -93,7 +93,7 @@ export const TIDE: ScenePack = {
       checkpointId: "s02-c01-k01",
       index: 1,
       title: "潮线直行",
-      brief: "退潮后的巡检线笔直通向救援基地，把前进动作放进循环里，让小车一次走完五格，别越过边界。",
+      brief: "退潮后的巡检线笔直通向救援基地，把移动动作放进循环里，让小车一次走完五格，别越过边界。",
       hint: "重复五次前进一步。",
       grid: { width: 6, height: 6, obstacles: [{ x: 1, y: 1 }, { x: 3, y: 2 }, { x: 2, y: 4 }, { x: 5, y: 1 }], corners: [] },
       start: { x: 0, y: 3, direction: "east" },
@@ -112,7 +112,7 @@ export const TIDE: ScenePack = {
       ],
       tutorial: [
         { text: "潮水退去，露出一条笔直的巡检线。", highlight: "grid" },
-        { text: "把前进放进重复指令，设定循环次数。", highlight: "palette" },
+        { text: "把移动（方向前进）放进重复指令，设定循环次数。", highlight: "palette" },
         { text: "运行看看，循环结束时是否刚好停在救援基地。", highlight: "run" }
       ],
       water: [{ x: 0, y: 0 }, { x: 1, y: 3 }]

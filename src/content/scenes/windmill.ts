@@ -106,7 +106,7 @@ export const WINDMILL: ScenePack = {
       ],
       tutorial: [
         { text: "风车原野的起点已经亮起，先看清小车面朝的方向。", highlight: "grid" },
-        { text: "在指令栏选择前进，输入需要的格数。", highlight: "palette" },
+        { text: "在指令栏选择移动，方向保持前进，输入需要的格数。", highlight: "palette" },
         { text: "点击运行，让小车走到东侧的救援基地。", highlight: "run" }
       ],
       water: [{ x: 0, y: 0 }, { x: 0, y: 1 }]

@@ -8,6 +8,9 @@
 /** Cardinal heading of the coder. */
 export type Direction = "north" | "east" | "south" | "west";
 
+/** Relative direction of a move command. */
+export type MoveDirection = "forward" | "backward";
+
 /** A cell on the level grid. */
 export interface Point {
   x: number;
@@ -22,7 +25,7 @@ export type Condition =
 
 /** A single node in a visual or text program. */
 export type Command =
-  | { kind: "forward"; steps: number }
+  | { kind: "forward"; steps: number; direction?: MoveDirection }
   | { kind: "turn"; direction: "left" | "right" }
   | { kind: "repeat"; times: number; body: Command[] }
   | { kind: "if"; condition: Condition; then: Command[]; else?: Command[] }

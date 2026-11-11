@@ -1,4 +1,4 @@
-import { cellKey, stepPoint, turnDirection } from "../domain/commands";
+import { cellKey, oppositeDirection, stepPoint, turnDirection } from "../domain/commands";
 import type { Command, Condition, Direction, LevelSpec, Point, RunResult } from "../domain/types";
 import { isWaterBlocked } from "./water";
 
@@ -87,8 +87,10 @@ export function simulate(level: LevelSpec, program: Command[]): RunResult {
       switch (command.kind) {
         case "forward": {
           const count = nonNegativeInteger(command.steps);
+          const moveDirection =
+            command.direction === "backward" ? oppositeDirection(direction) : direction;
           for (let i = 0; i < count; i += 1) {
-            const next = nextCell();
+            const next = stepPoint(position, moveDirection);
             if (!inside(next)) {
               failureReason = "out-of-bounds";
               return false;
@@ -105,7 +107,11 @@ export function simulate(level: LevelSpec, program: Command[]): RunResult {
               return false;
             }
             position = next;
-            trace.push({ action: "forward", position: { ...position }, direction });
+            trace.push({
+              action: command.direction === "backward" ? "backward" : "forward",
+              position: { ...position },
+              direction,
+            });
             const key = cellKey(position);
             if (itemKeys.has(key)) {
               collected.add(key);

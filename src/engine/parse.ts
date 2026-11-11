@@ -14,6 +14,7 @@ class ParseError extends Error {
 }
 
 const FORWARD = /^coder\.forward\(\s*(-?\d+)\s*\)$/;
+const BACKWARD = /^coder\.backward\(\s*(-?\d+)\s*\)$/;
 const REPEAT = /^repeat\(\s*(-?\d+)\s*\):$/;
 const IF_VAR = /^if\s+([A-Za-z_][A-Za-z0-9_]*)\s*>=\s*(-?\d+):$/;
 const CHANGE_VAR = /^([A-Za-z_][A-Za-z0-9_]*)\s*\+=\s*(-?\d+)$/;
@@ -134,6 +135,16 @@ export function parseTextProgram(source: string): { program: Command[]; error?: 
     if (forward !== null) {
       index += 1;
       return { kind: "forward", steps: toInt(forward[1], current.line) };
+    }
+
+    const backward = BACKWARD.exec(text);
+    if (backward !== null) {
+      index += 1;
+      return {
+        kind: "forward",
+        steps: toInt(backward[1], current.line),
+        direction: "backward",
+      };
     }
 
     if (text === "coder.turnLeft()") {

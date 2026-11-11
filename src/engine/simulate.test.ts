@@ -62,6 +62,25 @@ describe("simulate", () => {
     ]);
   });
 
+  test("moves backward without changing the facing", () => {
+    const level = makeLevel({
+      start: { x: 2, y: 0, direction: "east" },
+      target: { x: 0, y: 0 },
+    });
+    const run = simulate(level, [
+      { kind: "forward", steps: 2, direction: "backward" },
+    ]);
+
+    expect(run.completed).toBe(true);
+    expect(run.failureReason).toBeUndefined();
+    expect(run.steps).toBe(2);
+    expect(run.final).toEqual({ x: 0, y: 0, direction: "east" });
+    expect(run.trace).toEqual([
+      { action: "backward", position: { x: 1, y: 0 }, direction: "east" },
+      { action: "backward", position: { x: 0, y: 0 }, direction: "east" },
+    ]);
+  });
+
   test("turns rotate 90 degrees and cost one step each", () => {
     const level = makeLevel({
       start: { x: 1, y: 1, direction: "north" },
