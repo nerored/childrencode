@@ -3493,3 +3493,95 @@ button.block__drag-handle:active:not(:disabled) {
 .blueprint-editor.block-editor--delete-target .block-palette-panel__list {
   opacity: 0.45;
 }
+
+.block-stack-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  width: max-content;
+  max-width: 100%;
+}
+
+.block-stack-preview__item {
+  flex: none;
+}
+
+.blueprint-editor .block--detached {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.blueprint-editor .block--detached > .block {
+  cursor: grab;
+}
+
+.blueprint-editor .block-drag-ghost {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  width: max-content;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+  opacity: 0.96;
+  rotate: 0deg;
+  transform: translate3d(var(--drag-x, 0px), var(--drag-y, 0px), 0) scale(var(--drag-zoom, 1));
+  transform-origin: 0 0;
+}
+
+.blueprint-editor .block-drag-ghost::before,
+.blueprint-editor .block-drag-ghost::after {
+  content: none;
+  display: none;
+}
+
+.blueprint-editor .block-drag-target {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 80;
+  pointer-events: none;
+  opacity: 0.96;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.blueprint-editor .block-drag-target__outline {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  width: max-content;
+  max-width: min(24rem, calc(100vw - var(--level-space-5)));
+  padding: 8px;
+  border: 2px dashed var(--level-accent-strong);
+  border-radius: 16px;
+  background: var(--level-accent-wash);
+  box-shadow:
+    0 0 0 6px var(--level-accent-wash),
+    0 18px 40px rgba(25, 86, 184, 0.18);
+}
+
+.blueprint-editor .block-drag-target .block {
+  opacity: 0.62;
+  filter: saturate(0.85);
+}
+
+.blueprint-editor .block-drag-target .block__socket {
+  opacity: 0.5;
+}
+
+.blueprint-editor .drop-slot--snap::after,
+.blueprint-editor .drop-slot--snap::before {
+  content: none;
+  display: none;
+}

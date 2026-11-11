@@ -3,10 +3,11 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { countCommands } from "../../domain/commands";
 import type { Command, CommandKind, Condition, LevelSpec } from "../../domain/types";
 import {
-  insertCommand,
+  getCommandTail,
+  insertCommands,
   isDescendantContainer,
-  moveCommand,
-  removeCommand,
+  moveCommandStack,
+  removeCommandTail,
 } from "./commandTree";
 import type { BlockAddress, ContainerPath } from "./commandTree";
 import { pickSnap, socketZone } from "./blockGraph";
@@ -24,7 +25,8 @@ import type { BlueprintView } from "./blueprint";
 
 export interface DetachedBlock {
   id: string;
-  command: Command;
+  commands: Command[];
+  keys: string[];
   x: number;
   y: number;
 }
@@ -106,13 +108,20 @@ function describeCommand(command: Command): string {
  * the move, and pointercancel aborts it. Click/keyboard editing stays intact.
  */
 type DragSource =
-  | { kind: "block"; address: BlockAddress; command: Command }
-  | { kind: "detached"; id: string; command: Command }
-  | { kind: "palette"; command: Command };
+  | { kind: "block"; address: BlockAddress; commands: Command[] }
+  | {
+      kind: "detached";
+      id: string;
+      offset: number;
+      commands: Command[];
+      keys: string[];
+    }
+  | { kind: "palette"; commands: [Command] };
 
 interface DragState {
   source: DragSource;
   snapKey: string | null;
+  snapPoint: { x: number; y: number } | null;
 }
 
 interface PointerSession {
@@ -144,14 +153,18 @@ interface SnapSocket {
 
 interface DragApi {
   snapKey: string | null;
-  draggingKey: string | null;
+  draggingKeys: string[];
   startBlock(
     event: ReactPointerEvent<HTMLElement>,
     address: BlockAddress,
     command: Command,
   ): void;
   startPalette(event: ReactPointerEvent<HTMLElement>, entry: PaletteEntry): void;
-  startDetached(event: ReactPointerEvent<HTMLElement>, block: DetachedBlock): void;
+  startDetached(
+    event: ReactPointerEvent<HTMLElement>,
+    block: DetachedBlock,
+    index: number,
+  ): void;
   move(event: ReactPointerEvent<HTMLElement>): void;
   end(event: ReactPointerEvent<HTMLElement>): void;
   cancel(event: ReactPointerEvent<HTMLElement>): void;
@@ -177,13 +190,19 @@ function isDropAllowed(source: DragSource, drop: ActiveDrop): boolean {
   if (source.kind !== "block") {
     return true;
   }
-  if (isDescendantContainer(drop.container, source.address)) {
-    return false;
+  for (let offset = 0; offset < source.commands.length; offset += 1) {
+    if (
+      isDescendantContainer(drop.container, {
+        container: source.address.container,
+        index: source.address.index + offset,
+      })
+    ) {
+      return false;
+    }
   }
   return !(
     sameContainerPath(drop.container, source.address.container) &&
-    (drop.index === source.address.index ||
-      drop.index === source.address.index + 1)
+    drop.index >= source.address.index
   );
 }
 
@@ -799,7 +818,7 @@ function BlockList({
                   address={address}
                   drag={drag}
                   label={`${describeCommand(command)}（第 ${index + 1} 条）`}
-                  dragging={drag.draggingKey === addressKey(address)}
+                  dragging={drag.draggingKeys.includes(addressKey(address))}
                   onChange={(next) => onChange(replaceAt(commands, index, next))}
                   onRemove={() => onRemove(address)}
                   onMoveToSlot={onMoveToSlot}
@@ -836,28 +855,72 @@ function BlockList({
 interface DetachedBlockCardProps {
   block: DetachedBlock;
   drag: DragApi;
-  onChange(command: Command): void;
+  onChange(index: number, command: Command): void;
 }
 
 function DetachedBlockCard({ block, drag, onChange }: DetachedBlockCardProps) {
   return (
-    <article
-      className={`block block--${block.command.kind} block--detached`}
+    <div
+      className="block--detached detached-block-stack"
       style={{ transform: `translate3d(${block.x}px, ${block.y}px, 0)` }}
       data-detached-id={block.id}
-      aria-label={`未连接指令：${describeCommand(block.command)}；拖到插槽连接，拖回指令栏删除`}
-      onPointerDown={(event) => drag.startDetached(event, block)}
-      onPointerMove={drag.move}
-      onPointerUp={drag.end}
-      onPointerCancel={drag.cancel}
     >
-      <div className="block__head">
-        <div className="block__content">
-          <CommandFields command={block.command} onChange={onChange} />
+      {block.commands.map((command, index) => (
+        <article
+          key={block.keys[index]}
+          className={`block block--${command.kind}`}
+          aria-label={`未连接指令 ${index + 1}：${describeCommand(command)}；拖到插槽连接，拖回指令栏删除`}
+          onPointerDown={(event) => drag.startDetached(event, block, index)}
+          onPointerMove={drag.move}
+          onPointerUp={drag.end}
+          onPointerCancel={drag.cancel}
+        >
+          <div className="block__head">
+            <div className="block__content">
+              <CommandFields
+                command={command}
+                onChange={(next) => onChange(index, next)}
+              />
+            </div>
+          </div>
+          <span className="block__socket" aria-hidden="true" />
+        </article>
+      ))}
+    </div>
+  );
+}
+
+const previewCommandKeys = new WeakMap<Command, string>();
+let previewCommandKeySequence = 0;
+
+function previewCommandKey(command: Command): string {
+  const existing = previewCommandKeys.get(command);
+  if (existing !== undefined) {
+    return existing;
+  }
+  previewCommandKeySequence += 1;
+  const key = `preview-${previewCommandKeySequence}`;
+  previewCommandKeys.set(command, key);
+  return key;
+}
+
+function BlockStackPreview({ commands }: { commands: Command[] }) {
+  return (
+    <div className="block-stack-preview" aria-hidden="true">
+      {commands.map((command) => (
+        <div
+          key={previewCommandKey(command)}
+          className={`block block--${command.kind} block-stack-preview__item`}
+        >
+          <div className="block__head">
+            <div className="block__content">
+              <CommandFields command={command} onChange={() => {}} />
+            </div>
+          </div>
+          <span className="block__socket" aria-hidden="true" />
         </div>
-      </div>
-      <span className="block__socket" aria-hidden="true" />
-    </article>
+      ))}
+    </div>
   );
 }
 
@@ -1243,7 +1306,16 @@ export default function BlockEditor({
     address: BlockAddress,
     command: Command,
   ) => {
-    beginSession(event, { kind: "block", address, command }, true);
+    const commands = getCommandTail(program, address);
+    beginSession(
+      event,
+      {
+        kind: "block",
+        address,
+        commands: commands.length > 0 ? commands : [command],
+      },
+      true,
+    );
   };
 
   const startPalette = (
@@ -1251,16 +1323,23 @@ export default function BlockEditor({
     entry: PaletteEntry,
   ) => {
     suppressClickUntilRef.current = 0;
-    beginSession(event, { kind: "palette", command: entry.create() }, false);
+    beginSession(event, { kind: "palette", commands: [entry.create()] }, false);
   };
 
   const startDetached = (
     event: ReactPointerEvent<HTMLElement>,
     block: DetachedBlock,
+    index: number,
   ) => {
     beginSession(
       event,
-      { kind: "detached", id: block.id, command: block.command },
+      {
+        kind: "detached",
+        id: block.id,
+        offset: index,
+        commands: block.commands.slice(index),
+        keys: block.keys.slice(index),
+      },
       true,
     );
   };
@@ -1293,9 +1372,18 @@ export default function BlockEditor({
       dragRef.current?.snapKey ?? null,
     );
     const snapKey = snap === null ? null : snap.key;
+    const snapPoint = snap === null ? null : { x: snap.target.x, y: snap.target.y };
     const current = dragRef.current;
-    if (current === null || current.snapKey !== snapKey) {
-      applyDrag({ source: session.source, snapKey });
+    if (
+      current === null ||
+      current.snapKey !== snapKey ||
+      (snapPoint === null && current.snapPoint !== null) ||
+      (snapPoint !== null &&
+        (current.snapPoint === null ||
+          current.snapPoint.x !== snapPoint.x ||
+          current.snapPoint.y !== snapPoint.y))
+    ) {
+      applyDrag({ source: session.source, snapKey, snapPoint });
     }
 
     const hit = document.elementFromPoint(event.clientX, event.clientY);
@@ -1310,6 +1398,38 @@ export default function BlockEditor({
     detachedIdRef.current += 1;
     return `free-${detachedIdRef.current}`;
   };
+
+  const createFree = (
+    commands: Command[],
+    position: { x: number; y: number },
+    keys?: string[],
+  ): DetachedBlock => {
+    const id = nextDetachedId();
+    return {
+      id,
+      commands,
+      keys:
+        keys ?? commands.map((_, index) => `${id}-${index}`),
+      ...position,
+    };
+  };
+
+  const removeDetachedTail = (id: string, offset: number): DetachedBlock[] =>
+    detached.flatMap((item) => {
+      if (item.id !== id) {
+        return [item];
+      }
+      const remaining = item.commands.slice(0, offset);
+      return remaining.length === 0
+        ? []
+        : [
+            {
+              ...item,
+              commands: remaining,
+              keys: item.keys.slice(0, offset),
+            },
+          ];
+    });
 
   const handleEnd = (event: ReactPointerEvent<HTMLElement>) => {
     const session = sessionRef.current;
@@ -1367,21 +1487,21 @@ export default function BlockEditor({
 
     if (active !== null) {
       if (source.kind === "block") {
-        const next = moveCommand(program, source.address, active);
+        const next = moveCommandStack(program, source.address, active);
         if (next !== program) {
           onChange(next);
         }
         return;
       }
       if (source.kind === "detached") {
-        const next = insertCommand(program, active, source.command);
+        const next = insertCommands(program, active, source.commands);
         if (next !== program) {
           onChange(next);
+          onDetachedChange(removeDetachedTail(source.id, source.offset));
         }
-        onDetachedChange(detached.filter((item) => item.id !== source.id));
         return;
       }
-      const next = insertCommand(program, active, source.command);
+      const next = insertCommands(program, active, source.commands);
       if (next !== program) {
         onChange(next);
       }
@@ -1390,12 +1510,12 @@ export default function BlockEditor({
 
     if (overPalette) {
       if (source.kind === "block") {
-        const next = removeCommand(program, source.address);
+        const next = removeCommandTail(program, source.address);
         if (next !== program) {
           onChange(next);
         }
       } else if (source.kind === "detached") {
-        onDetachedChange(detached.filter((item) => item.id !== source.id));
+        onDetachedChange(removeDetachedTail(source.id, source.offset));
       }
       return;
     }
@@ -1405,38 +1525,37 @@ export default function BlockEditor({
     }
 
     if (source.kind === "block") {
-      const next = removeCommand(program, source.address);
+      const next = removeCommandTail(program, source.address);
       if (next === program) {
         return;
       }
       onChange(next);
       onDetachedChange([
         ...detached,
-        {
-          id: nextDetachedId(),
-          command: source.command,
-          ...freePosition,
-        },
+        createFree(source.commands, freePosition),
       ]);
       return;
     }
 
     if (source.kind === "detached") {
-      onDetachedChange(
-        detached.map((item) =>
-          item.id === source.id ? { ...item, ...freePosition } : item,
-        ),
-      );
+      if (source.offset === 0) {
+        onDetachedChange(
+          detached.map((item) =>
+            item.id === source.id ? { ...item, ...freePosition } : item,
+          ),
+        );
+      } else {
+        onDetachedChange([
+          ...removeDetachedTail(source.id, source.offset),
+          createFree(source.commands, freePosition, source.keys),
+        ]);
+      }
       return;
     }
 
     onDetachedChange([
       ...detached,
-      {
-        id: nextDetachedId(),
-        command: source.command,
-        ...freePosition,
-      },
+      createFree(source.commands, freePosition),
     ]);
   };
 
@@ -1544,14 +1663,14 @@ export default function BlockEditor({
   };
 
   const removeAt = (address: BlockAddress) => {
-    const next = removeCommand(program, address);
+    const next = removeCommandTail(program, address);
     if (next !== program) {
       onChange(next);
     }
   };
 
   const moveToSlot = (from: BlockAddress, toIndex: number) => {
-    const next = moveCommand(program, from, {
+    const next = moveCommandStack(program, from, {
       container: from.container,
       index: toIndex,
     });
@@ -1560,12 +1679,22 @@ export default function BlockEditor({
     }
   };
 
+  const draggingKeys: string[] = [];
+  if (drag !== null && drag.source.kind === "block") {
+    const source = drag.source;
+    for (let offset = 0; offset < source.commands.length; offset += 1) {
+      draggingKeys.push(
+        addressKey({
+          container: source.address.container,
+          index: source.address.index + offset,
+        }),
+      );
+    }
+  }
+
   const dragApi: DragApi = {
     snapKey: drag === null ? null : drag.snapKey,
-    draggingKey:
-      drag !== null && drag.source.kind === "block"
-        ? addressKey(drag.source.address)
-        : null,
+    draggingKeys,
     startBlock,
     startPalette,
     startDetached,
@@ -1644,10 +1773,17 @@ export default function BlockEditor({
                 key={block.id}
                 block={block}
                 drag={dragApi}
-                onChange={(command) =>
+                onChange={(index, command) =>
                   onDetachedChange(
                     detached.map((item) =>
-                      item.id === block.id ? { ...item, command } : item,
+                      item.id === block.id
+                        ? {
+                            ...item,
+                            commands: item.commands.map((current, currentIndex) =>
+                              currentIndex === index ? command : current,
+                            ),
+                          }
+                        : item,
                     ),
                   )
                 }
@@ -1663,15 +1799,29 @@ export default function BlockEditor({
       </div>
 
       {drag !== null && (
-        <div
-          className={`block-drag-ghost block-drag-ghost--${drag.source.command.kind}${drag.snapKey === null ? "" : " block-drag-ghost--snap"}`}
-          aria-hidden="true"
-          inert
-        >
-          <div className="block__content">
-            <CommandFields command={drag.source.command} onChange={() => {}} />
+        <>
+          {drag.snapPoint !== null && (
+            <div
+              className="block-drag-target"
+              style={{
+                transform: `translate3d(${drag.snapPoint.x - 10 * view.zoom}px, ${drag.snapPoint.y - 10 * view.zoom}px, 0) scale(${view.zoom})`,
+              }}
+              aria-hidden="true"
+              inert
+            >
+              <div className="block-drag-target__outline">
+                <BlockStackPreview commands={drag.source.commands} />
+              </div>
+            </div>
+          )}
+          <div
+            className={`block-drag-ghost block-drag-ghost--${drag.source.commands[0].kind}`}
+            aria-hidden="true"
+            inert
+          >
+            <BlockStackPreview commands={drag.source.commands} />
           </div>
-        </div>
+        </>
       )}
     </section>
   );

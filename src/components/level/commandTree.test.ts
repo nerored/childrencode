@@ -2,11 +2,15 @@ import { describe, expect, test } from "bun:test";
 import type { Command } from "../../domain/types";
 import {
   getCommandAt,
+  getCommandTail,
   getContainer,
   insertCommand,
+  insertCommands,
   isDescendantContainer,
   moveCommand,
+  moveCommandStack,
   removeCommand,
+  removeCommandTail,
 } from "./commandTree";
 import type { BlockAddress, ContainerPath } from "./commandTree";
 
@@ -277,6 +281,114 @@ describe("moveCommand", () => {
     expect(moveCommand(program, address([], 0), address([0, "body"], 0))).toBe(program);
     expect(moveCommand(program, address([], 0), address([1, "body"], 1))).toBe(program);
     expect(moveCommand(program, address([], 0), address([], 99))).toBe(program);
+  });
+});
+
+describe("stack tails", () => {
+  test("gets the selected block and all following siblings", () => {
+    const program = [forward(1), turn("left"), turn("right")];
+    expect(getCommandTail(program, address([], 1))).toEqual([
+      turn("left"),
+      turn("right"),
+    ]);
+    expect(getCommandTail(program, address([], 3))).toEqual([]);
+
+    const nested = [repeat(2, [forward(1), turn("left")])];
+    expect(getCommandTail(nested, address([0, "body"], 0))).toEqual([
+      forward(1),
+      turn("left"),
+    ]);
+  });
+
+  test("removes the selected tail and keeps earlier siblings", () => {
+    const program = [forward(1), turn("left"), turn("right")];
+    const next = removeCommandTail(program, address([], 1));
+    expect(next).toEqual([forward(1)]);
+    expect(next[0]).toBe(program[0]);
+
+    const nested = [repeat(2, [forward(1), turn("left")]), forward(2)];
+    const nextNested = removeCommandTail(nested, address([0, "body"], 0));
+    expect(nextNested[0]).toEqual(repeat(2, []));
+    expect(nextNested[1]).toBe(nested[1]);
+  });
+
+  test("inserts several commands at root and nested slots", () => {
+    const program = [forward(1), turn("left")];
+    expect(insertCommands(program, address([], 1), [turn("right"), forward(2)])).toEqual([
+      forward(1),
+      turn("right"),
+      forward(2),
+      turn("left"),
+    ]);
+
+    const nested = [repeat(2, [forward(1)])];
+    const next = insertCommands(nested, address([0, "body"], 1), [
+      turn("right"),
+      forward(2),
+    ]);
+    expect(getContainer(next, [0, "body"])).toEqual([
+      forward(1),
+      turn("right"),
+      forward(2),
+    ]);
+
+    const branch = [ifCmd([])];
+    expect(insertCommands(branch, address([0, "else"], 0), [turn("left")])[0]).toEqual(
+      ifCmd([], [turn("left")]),
+    );
+  });
+
+  test("moves a middle stack together above an earlier block", () => {
+    const program = [forward(1), turn("left"), turn("right")];
+    const next = moveCommandStack(program, address([], 1), address([], 0));
+    expect(next).toEqual([turn("left"), turn("right"), forward(1)]);
+    expect(next[0]).toBe(program[1]);
+    expect(next[1]).toBe(program[2]);
+    expect(next[2]).toBe(program[0]);
+  });
+
+  test("moves a stack into an earlier block body", () => {
+    const program = [repeat(2, []), forward(1), turn("left")];
+    const next = moveCommandStack(program, address([], 1), address([0, "body"], 0));
+    expect(next).toHaveLength(1);
+    expect(next[0].kind).toBe("repeat");
+    expect(getContainer(next, [0, "body"])).toEqual([forward(1), turn("left")]);
+  });
+
+  test("moves a nested tail out to the root", () => {
+    const program = [repeat(2, [forward(1), turn("left")]), turn("right")];
+    const next = moveCommandStack(program, address([0, "body"], 0), address([], 1));
+    expect(next).toHaveLength(4);
+    expect(next[0]).toEqual(repeat(2, []));
+    expect(next[1]).toEqual(forward(1));
+    expect(next[2]).toEqual(turn("left"));
+    expect(next[3]).toBe(program[1]);
+  });
+
+  test("rejects drops at or below the source and into any moved command", () => {
+    const program = [forward(1), repeat(2, [turn("left")]), turn("right")];
+    expect(moveCommandStack(program, address([], 1), address([], 1))).toBe(program);
+    expect(moveCommandStack(program, address([], 1), address([], 2))).toBe(program);
+    expect(moveCommandStack(program, address([], 1), address([1, "body"], 0))).toBe(
+      program,
+    );
+
+    const withFollowingBody = [forward(1), repeat(2, []), ifCmd([turn("left")])];
+    expect(
+      moveCommandStack(
+        withFollowingBody,
+        address([], 1),
+        address([2, "then"], 0),
+      ),
+    ).toBe(withFollowingBody);
+  });
+
+  test("returns the input for missing or invalid stack moves", () => {
+    const program = [forward(1), repeat(2, [])];
+    expect(moveCommandStack(program, address([], 2), address([], 0))).toBe(program);
+    expect(moveCommandStack(program, address([], 0), address([], 99))).toBe(program);
+    expect(removeCommandTail(program, address([], 2))).toBe(program);
+    expect(insertCommands(program, address([], 0), [])).toBe(program);
   });
 });
 

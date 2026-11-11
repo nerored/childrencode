@@ -140,6 +140,50 @@ function removeAt(
   return commands.map((item, current) => (current === slot ? next : item));
 }
 
+function removeTailAt(
+  commands: Command[],
+  path: ContainerPath,
+  index: number,
+): Command[] {
+  if (path.length === 0) {
+    if (!isInteger(index) || index < 0 || index > commands.length) {
+      return commands;
+    }
+    return commands.slice(0, index);
+  }
+
+  const [slot, branch, ...rest] = path;
+  if (
+    !isInteger(slot) ||
+    slot < 0 ||
+    slot >= commands.length ||
+    !isBranchKey(branch)
+  ) {
+    return commands;
+  }
+
+  const command = commands[slot];
+  let next: Command;
+
+  if (branch === "body" && command.kind === "repeat") {
+    next = { ...command, body: removeTailAt(command.body, rest, index) };
+  } else if (branch === "then" && command.kind === "if") {
+    next = { ...command, then: removeTailAt(command.then, rest, index) };
+  } else if (branch === "else" && command.kind === "if") {
+    const nextElse = removeTailAt(command.else ?? [], rest, index);
+    if (nextElse.length === 0) {
+      const { else: _unused, ...withoutElse } = command;
+      next = withoutElse;
+    } else {
+      next = { ...command, else: nextElse };
+    }
+  } else {
+    return commands;
+  }
+
+  return commands.map((item, current) => (current === slot ? next : item));
+}
+
 /**
  * Remove the command at `address`. Only the containers along the path are
  * rebuilt; unrelated commands keep their identity. An `if` whose `else`
@@ -192,6 +236,50 @@ function insertAt(
   return commands.map((item, currentSlot) => (currentSlot === slot ? next : item));
 }
 
+function insertManyAt(
+  commands: Command[],
+  path: ContainerPath,
+  index: number,
+  added: readonly Command[],
+): Command[] {
+  if (path.length === 0) {
+    if (!isInteger(index) || index < 0 || index > commands.length) {
+      return commands;
+    }
+    const next = commands.slice();
+    next.splice(index, 0, ...added);
+    return next;
+  }
+
+  const [slot, branch, ...rest] = path;
+  if (
+    !isInteger(slot) ||
+    slot < 0 ||
+    slot >= commands.length ||
+    !isBranchKey(branch)
+  ) {
+    return commands;
+  }
+
+  const current = commands[slot];
+  let next: Command;
+
+  if (branch === "body" && current.kind === "repeat") {
+    next = { ...current, body: insertManyAt(current.body, rest, index, added) };
+  } else if (branch === "then" && current.kind === "if") {
+    next = { ...current, then: insertManyAt(current.then, rest, index, added) };
+  } else if (branch === "else" && current.kind === "if") {
+    next = {
+      ...current,
+      else: insertManyAt(current.else ?? [], rest, index, added),
+    };
+  } else {
+    return commands;
+  }
+
+  return commands.map((item, currentSlot) => (currentSlot === slot ? next : item));
+}
+
 /**
  * Insert `command` at `address` in pre-insertion coordinates. The index may
  * equal the container length (append). A missing `else` branch is created.
@@ -213,6 +301,77 @@ export function insertCommand(
     return program;
   }
   return insertAt(program, address.container, address.index, command);
+}
+
+/**
+ * Return the command at `address` and every following sibling in its container.
+ * This is the stack a middle block carries when it is dragged.
+ */
+export function getCommandTail(
+  program: Command[],
+  address: BlockAddress,
+): Command[] {
+  const container = getContainer(program, address.container);
+  if (container === undefined) {
+    return [];
+  }
+  if (
+    !isInteger(address.index) ||
+    address.index < 0 ||
+    address.index >= container.length
+  ) {
+    return [];
+  }
+  return container.slice(address.index);
+}
+
+/**
+ * Remove the command at `address` and every following sibling in its
+ * container, returning a new tree.
+ */
+export function removeCommandTail(
+  program: Command[],
+  address: BlockAddress,
+): Command[] {
+  const container = getContainer(program, address.container);
+  if (container === undefined) {
+    return program;
+  }
+  if (
+    !isInteger(address.index) ||
+    address.index < 0 ||
+    address.index >= container.length
+  ) {
+    return program;
+  }
+  return removeTailAt(program, address.container, address.index);
+}
+
+/**
+ * Insert several commands at `address` in pre-insertion coordinates. The
+ * index may equal the container length (append). A missing `else` branch is
+ * created when the first command lands there.
+ */
+export function insertCommands(
+  program: Command[],
+  address: BlockAddress,
+  added: readonly Command[],
+): Command[] {
+  if (added.length === 0) {
+    return program;
+  }
+  const container = getContainer(program, address.container);
+  if (container === undefined) {
+    return program;
+  }
+  if (
+    !isInteger(address.index) ||
+    address.index < 0 ||
+    address.index > container.length
+  ) {
+    return program;
+  }
+  return insertManyAt(program, address.container, address.index, added);
 }
 
 /**
@@ -282,4 +441,54 @@ export function moveCommand(
     { container: adjustedContainer, index: insertIndex },
     source,
   );
+}
+
+/**
+ * Move a block and every following sibling as one stack. Destinations inside
+ * any moved command, and slots at or below the source in the same container,
+ * are rejected. Valid destinations are interpreted in pre-removal
+ * coordinates; the source tail is removed before the stack is inserted.
+ */
+export function moveCommandStack(
+  program: Command[],
+  from: BlockAddress,
+  to: BlockAddress,
+): Command[] {
+  const sourceContainer = getContainer(program, from.container);
+  if (sourceContainer === undefined) {
+    return program;
+  }
+  if (
+    !isInteger(from.index) ||
+    from.index < 0 ||
+    from.index >= sourceContainer.length
+  ) {
+    return program;
+  }
+  const tail = sourceContainer.slice(from.index);
+  const destination = getContainer(program, to.container);
+  if (destination === undefined) {
+    return program;
+  }
+  if (!isInteger(to.index) || to.index < 0 || to.index > destination.length) {
+    return program;
+  }
+  if (
+    samePath(from.container, to.container) &&
+    to.index >= from.index
+  ) {
+    return program;
+  }
+  for (let offset = 0; offset < tail.length; offset += 1) {
+    if (
+      isDescendantContainer(to.container, {
+        container: from.container,
+        index: from.index + offset,
+      })
+    ) {
+      return program;
+    }
+  }
+
+  return insertCommands(removeCommandTail(program, from), to, tail);
 }
