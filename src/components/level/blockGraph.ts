@@ -60,10 +60,9 @@ function distanceToZone(zone: SnapZone, x: number, y: number): number {
 export function pickSnap<A extends string>(
   targets: readonly SnapTarget<A>[],
   pointer: { x: number; y: number },
-  vector: DragVector,
 ): ResolvedSnap<A> | null {
-  const anchorX = pointer.x + vector.dx;
-  const anchorY = pointer.y + vector.dy;
+  const anchorX = pointer.x;
+  const anchorY = pointer.y;
   let best: ResolvedSnap<A> | null = null;
   let bestZoneDistance = Number.POSITIVE_INFINITY;
 

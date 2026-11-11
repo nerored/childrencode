@@ -45,6 +45,8 @@ interface PaletteEntry {
   create(): Command;
 }
 
+const SNAP_STICKINESS_PX = 14;
+
 const KIND_GLYPH: Record<CommandKind, string> = {
   forward: "→",
   turn: "↻",
@@ -109,8 +111,6 @@ type DragSource =
   | { kind: "palette"; command: Command };
 
 interface DragState {
-  ghostX: number;
-  ghostY: number;
   source: DragSource;
   snapKey: string | null;
 }
@@ -1026,7 +1026,10 @@ export default function BlockEditor({
   const panRef = useRef<PanSession | null>(null);
   const suppressClickUntilRef = useRef(0);
   const detachedIdRef = useRef(0);
+  const dragRef = useRef<DragState | null>(null);
+  const deleteTargetRef = useRef(false);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState(false);
   const [view, setView] = useState<BlueprintView>(DEFAULT_BLUEPRINT_VIEW);
   const [panning, setPanning] = useState(false);
 
@@ -1037,7 +1040,14 @@ export default function BlockEditor({
     if (session.captureEl.hasPointerCapture(session.pointerId)) {
       session.captureEl.releasePointerCapture(session.pointerId);
     }
+    dragRef.current = null;
+    deleteTargetRef.current = false;
     setDrag(null);
+    setDeleteTarget(false);
+    const root = editorRootRef.current;
+    root?.style.removeProperty("--drag-x");
+    root?.style.removeProperty("--drag-y");
+    root?.style.removeProperty("--drag-zoom");
   }, []);
 
   useEffect(() => {
@@ -1115,26 +1125,64 @@ export default function BlockEditor({
     return slot;
   };
 
-  /** Nearest visible socket whose expanded zone contains the drag anchor. */
+  const positionGhost = (x: number, y: number, zoom: number) => {
+    const root = editorRootRef.current;
+    if (root === null) {
+      return;
+    }
+    root.style.setProperty("--drag-x", `${x}px`);
+    root.style.setProperty("--drag-y", `${y}px`);
+    root.style.setProperty("--drag-zoom", String(zoom));
+  };
+
+  const applyDrag = (next: DragState | null) => {
+    dragRef.current = next;
+    setDrag(next);
+  };
+
+  const applyDeleteTarget = (next: boolean) => {
+    if (deleteTargetRef.current === next) {
+      return;
+    }
+    deleteTargetRef.current = next;
+    setDeleteTarget(next);
+  };
+
+  /** Nearest visible socket whose expanded zone contains the pointer. */
   const resolveSnap = (
     session: PointerSession,
     x: number,
     y: number,
-  ): { socket: SnapSocket; x: number; y: number } | null => {
+    preferredKey: string | null = null,
+  ): SnapSocket | null => {
     const sockets = collectSockets(editorRootRef.current, session.source);
     const snap = pickSnap(
       sockets.map((socket) => socket.target),
       { x, y },
-      session.grabOffset,
     );
     if (snap === null) {
       return null;
     }
-    const socket = sockets.find((candidate) => candidate.key === snap.address);
-    if (socket === undefined) {
-      return null;
+    const nearest = sockets.find((candidate) => candidate.key === snap.address);
+    if (nearest === undefined || preferredKey === null || preferredKey === nearest.key) {
+      return nearest ?? null;
     }
-    return { socket, x: snap.x, y: snap.y };
+    const preferred = sockets.find((candidate) => candidate.key === preferredKey);
+    const zone = preferred?.target.zone;
+    if (preferred === undefined || zone === undefined) {
+      return nearest;
+    }
+    if (x < zone.left || x > zone.right || y < zone.top || y > zone.bottom) {
+      return nearest;
+    }
+    const preferredDistance = Math.hypot(
+      x - preferred.target.x,
+      y - preferred.target.y,
+    );
+    if (snap.address !== preferred.target.address && snap.distance < preferredDistance - SNAP_STICKINESS_PX) {
+      return nearest;
+    }
+    return preferred;
   };
 
   const beginSession = (
@@ -1232,13 +1280,30 @@ export default function BlockEditor({
       session.active = true;
     }
 
-    const snap = resolveSnap(session, event.clientX, event.clientY);
-    setDrag({
-      ghostX: snap === null ? event.clientX + session.grabOffset.dx : snap.x,
-      ghostY: snap === null ? event.clientY + session.grabOffset.dy : snap.y,
-      source: session.source,
-      snapKey: snap === null ? null : snap.socket.key,
-    });
+    positionGhost(
+      event.clientX + session.grabOffset.dx,
+      event.clientY + session.grabOffset.dy,
+      view.zoom,
+    );
+
+    const snap = resolveSnap(
+      session,
+      event.clientX,
+      event.clientY,
+      dragRef.current?.snapKey ?? null,
+    );
+    const snapKey = snap === null ? null : snap.key;
+    const current = dragRef.current;
+    if (current === null || current.snapKey !== snapKey) {
+      applyDrag({ source: session.source, snapKey });
+    }
+
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    const overPalette =
+      session.source.kind !== "palette" &&
+      hit instanceof Element &&
+      hit.closest(".block-palette-panel") !== null;
+    applyDeleteTarget(overPalette);
   };
 
   const nextDetachedId = () => {
@@ -1255,11 +1320,16 @@ export default function BlockEditor({
     const wasActive = session.active;
     const source = session.source;
     const snap = wasActive
-      ? resolveSnap(session, event.clientX, event.clientY)
+      ? resolveSnap(
+          session,
+          event.clientX,
+          event.clientY,
+          dragRef.current?.snapKey ?? null,
+        )
       : null;
     const active =
       snap !== null
-        ? snap.socket.drop
+        ? snap.drop
         : wasActive
           ? resolveActiveDrop(event.clientX, event.clientY, source)
           : null;
@@ -1510,7 +1580,7 @@ export default function BlockEditor({
   return (
     <section
       ref={editorRootRef}
-      className={`block-editor blueprint-editor${drag !== null ? " block-editor--dragging" : ""}`}
+      className={`block-editor blueprint-editor${drag !== null ? " block-editor--dragging" : ""}${deleteTarget ? " block-editor--delete-target" : ""}`}
       aria-label="积木指令编辑器：拖动积木任意位置移动或连接，拖回指令栏删除，从上方指令栏拖入画布。"
     >
       <BlockPalette
@@ -1595,20 +1665,12 @@ export default function BlockEditor({
       {drag !== null && (
         <div
           className={`block-drag-ghost block-drag-ghost--${drag.source.command.kind}${drag.snapKey === null ? "" : " block-drag-ghost--snap"}`}
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            pointerEvents: "none",
-            transform: `translate3d(${drag.ghostX}px, ${drag.ghostY}px, 0) scale(${view.zoom})`,
-            transformOrigin: "0 0",
-          }}
           aria-hidden="true"
+          inert
         >
-          <span className="block__kind">{KIND_GLYPH[drag.source.command.kind]}</span>
-          <span className="block-drag-ghost__label">
-            {describeCommand(drag.source.command)}
-          </span>
+          <div className="block__content">
+            <CommandFields command={drag.source.command} onChange={() => {}} />
+          </div>
         </div>
       )}
     </section>
