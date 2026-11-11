@@ -1,6 +1,6 @@
 # LEVEL SCREEN — PLAY, DRAG, PLAYBACK
 
-**Role:** the only interactive screen (score 8: 13 source files, ~4.5k source lines, 2,037-line `BlockEditor`). Earned a file because the run loop, the block tree editor and the playback clock interact and are easy to break.
+**Role:** the only interactive screen (score 8: 13 source files, ~4.6k source lines, 2,130-line `BlockEditor`). Earned a file because the run loop, the block tree editor and the playback clock interact and are easy to break.
 
 ## FILES
 | File | Owns |
@@ -30,7 +30,7 @@
 - `moveCommandStack` takes `to` in *pre-removal* coordinates; it removes the source tail before inserting and adjusts ancestor index segments itself.
 - Removing an `if`'s last `else` child must drop the `else` property entirely (keeps parse/format output unchanged).
 - `pythonSource === null` means "not edited yet" → text is regenerated from blocks via `formatTextProgram`.
-- The file is 2,037 lines with inline subcomponents; edit surgically instead of restyling the whole file.
+- The file is 2,130 lines with inline subcomponents; edit surgically instead of restyling the whole file.
 
 ## TEST FOCUS
 `commandTree.test.ts` asserts structural equality across tail extract/remove/insert and whole-stack moves, rejects subtree drops, and checks that untouched nodes keep identity; `playback.test.ts` asserts frame count (N+1), first-visit ordering, and that the start cell never rescues. Anything involving timers, pointer events or React is untested — verify by playing.

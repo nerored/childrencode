@@ -1,5 +1,13 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { countCommands } from "../../domain/commands";
 import type { Command, CommandKind, Condition, LevelSpec } from "../../domain/types";
@@ -356,9 +364,17 @@ function withElseBranch(command: Extract<Command, { kind: "if" }>, next: Command
   return { kind: "if", condition: command.condition, then: command.then };
 }
 
+interface KeypadAnchor {
+  left: number;
+  top: number;
+  bottom: number;
+}
+
 interface NumberKeypadProps {
   label: string;
   value: string;
+  anchor: KeypadAnchor;
+  layerRef: RefObject<HTMLDivElement | null>;
   onDigit(digit: string): void;
   onBackspace(): void;
   onClear(): void;
@@ -372,22 +388,50 @@ const KEYPAD_ROWS = [
   ["1", "2", "3"],
 ] as const;
 
+const KEYPAD_GAP = 8;
+
 function NumberKeypad({
   label,
   value,
+  anchor,
+  layerRef,
   onDigit,
   onBackspace,
   onClear,
   onConfirm,
   onCancel,
 }: NumberKeypadProps) {
-  if (typeof document === "undefined") {
-    return null;
-  }
-
   const keepInputFocus = (event: ReactPointerEvent<HTMLElement>) => {
     event.preventDefault();
   };
+  const [position, setPosition] = useState({
+    left: anchor.left,
+    top: anchor.bottom + KEYPAD_GAP,
+  });
+
+  useLayoutEffect(() => {
+    const layer = layerRef.current;
+    if (layer === null) {
+      return;
+    }
+    const rect = layer.getBoundingClientRect();
+    const margin = 12;
+    const maxLeft = Math.max(margin, window.innerWidth - rect.width - margin);
+    const left = Math.min(Math.max(anchor.left, margin), maxLeft);
+    let top = anchor.bottom + KEYPAD_GAP;
+    if (top + rect.height > window.innerHeight - margin) {
+      const above = anchor.top - rect.height - KEYPAD_GAP;
+      top = above >= margin ? above : Math.max(margin, window.innerHeight - rect.height - margin);
+    }
+    top = Math.min(Math.max(top, margin), Math.max(margin, window.innerHeight - rect.height - margin));
+    setPosition((current) =>
+      current.left === left && current.top === top ? current : { left, top },
+    );
+  }, [anchor, layerRef]);
+
+  if (typeof document === "undefined") {
+    return null;
+  }
 
   // The keypad must escape the transformed blueprint scene, but it still needs
   // the --level-* tokens, which are scoped to .level-screen.
@@ -397,20 +441,13 @@ function NumberKeypad({
   return createPortal(
     <div
       className="number-keypad-layer"
-      onPointerDown={(event) => {
-        event.stopPropagation();
-        if (event.target === event.currentTarget) {
-          event.preventDefault();
-          onConfirm();
-        }
-      }}
+      ref={layerRef}
+      style={{ left: position.left, top: position.top }}
     >
       <section
         className="number-keypad"
         role="dialog"
-        aria-modal="true"
         aria-label={`数字键盘：${label}`}
-        onPointerDown={(event) => event.stopPropagation()}
       >
         <header className="number-keypad__head">
           <div>
@@ -506,6 +543,9 @@ interface NumberFieldProps {
 function NumberField({ label, value, min, max, onChange }: NumberFieldProps) {
   const [draft, setDraft] = useState(String(value));
   const [keypadOpen, setKeypadOpen] = useState(false);
+  const [anchor, setAnchor] = useState<KeypadAnchor | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const keypadRef = useRef<HTMLDivElement>(null);
   const skipCommit = useRef(false);
 
   useEffect(() => {
@@ -562,18 +602,69 @@ function NumberField({ label, value, min, max, onChange }: NumberFieldProps) {
     });
   };
 
+  const openKeypad = () => {
+    const rect = inputRef.current?.getBoundingClientRect();
+    if (rect === undefined) {
+      return;
+    }
+    setAnchor({ left: rect.left, top: rect.top, bottom: rect.bottom });
+    setKeypadOpen(true);
+  };
+
+  const commitRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    commitRef.current = closeWithCommit;
+  });
+
+  useEffect(() => {
+    if (!keypadOpen) {
+      return undefined;
+    }
+    const updateAnchor = () => {
+      const rect = inputRef.current?.getBoundingClientRect();
+      if (rect !== undefined) {
+        setAnchor({ left: rect.left, top: rect.top, bottom: rect.bottom });
+      }
+    };
+    window.addEventListener("scroll", updateAnchor, true);
+    window.addEventListener("resize", updateAnchor);
+    return () => {
+      window.removeEventListener("scroll", updateAnchor, true);
+      window.removeEventListener("resize", updateAnchor);
+    };
+  }, [keypadOpen]);
+
+  useEffect(() => {
+    if (!keypadOpen) {
+      return undefined;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (keypadRef.current?.contains(target) || inputRef.current?.contains(target)) {
+        return;
+      }
+      commitRef.current();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [keypadOpen]);
+
   return (
     <>
       <label className="number-field">
         <span className="number-field__label">{label}</span>
         <input
+          ref={inputRef}
           type="text"
           inputMode="none"
           pattern="[0-9]*"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          onFocus={() => setKeypadOpen(true)}
-          onClick={() => setKeypadOpen(true)}
+          onFocus={openKeypad}
+          onClick={openKeypad}
           onBlur={commit}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -592,10 +683,12 @@ function NumberField({ label, value, min, max, onChange }: NumberFieldProps) {
           aria-haspopup="dialog"
         />
       </label>
-      {keypadOpen && (
+      {keypadOpen && anchor !== null && (
         <NumberKeypad
           label={label}
           value={draft}
+          anchor={anchor}
+          layerRef={keypadRef}
           onDigit={pressDigit}
           onBackspace={() =>
             setDraft((current) => (current.length <= 1 ? "" : current.slice(0, -1)))

@@ -11,7 +11,7 @@
   --ink-1: #14324b;
   --ink-2: #244a68;
   --ink-3: #4c6b85;
-  --ink-4: #57708a;
+  --ink-4: #4a6680;
   --on-accent: #ffffff;
 
   --sky-0: #dff3ff;
@@ -53,7 +53,7 @@
 
   --scene-01: #2f86d8;
   --scene-01-glow: rgba(47, 134, 216, 0.14);
-  --scene-01-ink: #1c6fb5;
+  --scene-01-ink: #155a96;
   --scene-02: #f26d5b;
   --scene-02-glow: rgba(242, 109, 91, 0.13);
   --scene-02-ink: #b23b2c;
@@ -784,7 +784,7 @@ code {
   border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
   background: var(--accent-wash);
-  color: var(--accent);
+  color: var(--accent-strong);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: 700;
@@ -1348,7 +1348,7 @@ code {
 .concept-badge code {
   font-size: 0.6rem;
   letter-spacing: 0.08em;
-  opacity: 0.75;
+  opacity: 0.95;
 }
 
 .scene-card__name {
@@ -1478,7 +1478,7 @@ code {
 }
 
 .chapter-tab__index {
-  color: var(--accent);
+  color: var(--accent-strong);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   letter-spacing: var(--tracking-wide);
@@ -1532,7 +1532,7 @@ code {
 }
 
 .chapter-tab__arrow {
-  color: var(--accent);
+  color: var(--accent-strong);
   font-family: var(--font-mono);
 }
 
