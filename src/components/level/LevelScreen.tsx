@@ -5,7 +5,7 @@ import { parseTextProgram } from "../../engine/parse";
 import { scoreRun } from "../../engine/score";
 import { simulate } from "../../engine/simulate";
 import BlockEditor, { type DetachedBlock } from "./BlockEditor";
-import GridStage from "./GridStage";
+import Stage3D from "./Stage3D";
 import HintPanel from "./HintPanel";
 import ResultModal from "./ResultModal";
 import {
@@ -273,7 +273,7 @@ export default function LevelScreen({
       <div className={`level-layout${track === "blocks" ? " level-layout--blocks" : ""}`}>
         <div className="level-stage-column">
           <div className="level-stage-map">
-            <GridStage level={level} frame={currentFrame} />
+            <Stage3D level={level} frame={currentFrame} />
             <div className="level-stage-actions" role="group" aria-label="程序操作">
               <span className="level-stage-actions__par">
                 目标：代码 ≤ {level.parCode} · 步数 ≤ {level.parSteps}
