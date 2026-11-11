@@ -2874,3 +2874,454 @@ button.block__drag-handle:active:not(:disabled) {
     transition-duration: 0.01ms;
   }
 }
+
+.blueprint-editor {
+  --kuai-blue: #2f6bff;
+  --kuai-blue-deep: #1f50d9;
+  --kuai-teal: #10b5a5;
+  --kuai-teal-deep: #0a9488;
+  --kuai-orange: #ff9d1f;
+  --kuai-orange-deep: #e68908;
+  --kuai-pink: #ff4f8f;
+  --kuai-pink-deep: #e73978;
+  --kuai-field: #ffffff;
+  --kuai-field-ink: #1c3b6c;
+  --kuai-dropdown: #1d53df;
+}
+
+.blueprint-editor .block--forward,
+.blueprint-editor .block--turn {
+  --kuai-bg: var(--kuai-blue);
+  --kuai-bg-deep: var(--kuai-blue-deep);
+}
+
+.blueprint-editor .block--repeat {
+  --kuai-bg: var(--kuai-teal);
+  --kuai-bg-deep: var(--kuai-teal-deep);
+}
+
+.blueprint-editor .block--if {
+  --kuai-bg: var(--kuai-pink);
+  --kuai-bg-deep: var(--kuai-pink-deep);
+}
+
+.blueprint-editor .block--setVar,
+.blueprint-editor .block--changeVar {
+  --kuai-bg: var(--kuai-orange);
+  --kuai-bg-deep: var(--kuai-orange-deep);
+}
+
+.blueprint-editor .block {
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--kuai-bg, var(--kuai-blue));
+  background-image: none;
+  color: #fff;
+  box-shadow: 0 2px 0 var(--kuai-bg-deep, var(--kuai-blue-deep));
+  overflow: visible;
+}
+
+.blueprint-editor .block-list {
+  align-items: flex-start;
+}
+
+.blueprint-editor .block-list__item {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.blueprint-editor .drop-slot {
+  align-self: stretch;
+}
+
+.blueprint-editor .block::before {
+  top: 0;
+  left: var(--block-notch-x);
+  width: var(--block-notch-w);
+  height: var(--block-notch-h);
+  border: 0;
+  border-radius: 0 0 6px 6px;
+  background: var(--level-bg-deep);
+  box-shadow: inset 0 -2px 0 var(--kuai-bg-deep, var(--kuai-blue-deep));
+  pointer-events: none;
+}
+
+.blueprint-editor .block__socket {
+  border: 0;
+  background: var(--kuai-bg, var(--kuai-blue));
+  background-image: none;
+  box-shadow: 0 2px 0 var(--kuai-bg-deep, var(--kuai-blue-deep));
+}
+
+.blueprint-editor .block__socket--snap {
+  background: #fff;
+  box-shadow:
+    0 0 0 3px var(--kuai-bg, var(--kuai-blue)),
+    0 2px 0 var(--kuai-bg-deep, var(--kuai-blue-deep));
+}
+
+.blueprint-editor .block__head {
+  min-height: 44px;
+  padding: 7px 12px;
+  box-sizing: border-box;
+  flex-wrap: nowrap;
+  gap: 5px;
+  border-radius: inherit;
+}
+
+.blueprint-editor .block__drag-handle,
+.blueprint-editor .block__kind {
+  display: none;
+}
+
+.blueprint-editor .block__content {
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.blueprint-editor .block__label {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.blueprint-editor .block__suffix {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.blueprint-editor .block__note {
+  display: none;
+}
+
+.blueprint-editor .block__controls {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.blueprint-editor .block:has(.block__controls :focus-visible) {
+  outline: 2px solid var(--level-accent-strong);
+  outline-offset: 2px;
+}
+
+.blueprint-editor .block .number-field,
+.blueprint-editor .block .text-field,
+.blueprint-editor .block .select-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  min-height: 22px;
+  padding: 1px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--kuai-field);
+  color: var(--kuai-field-ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  box-shadow: inset 0 -1px 0 rgba(18, 49, 99, 0.18);
+}
+
+.blueprint-editor .block .number-field__label,
+.blueprint-editor .block .text-field__label,
+.blueprint-editor .block .select-field__label {
+  display: none;
+}
+
+.blueprint-editor .block .number-field input,
+.blueprint-editor .block .text-field input {
+  width: 2.4em;
+  min-width: 1.4em;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: none;
+}
+
+.blueprint-editor .block .text-field input {
+  width: 4.6em;
+  text-align: left;
+}
+
+.blueprint-editor .block .select-field {
+  position: relative;
+  padding-right: 18px;
+  background: var(--kuai-dropdown);
+  color: #fff;
+}
+
+.blueprint-editor .block .select-field::after {
+  content: "▾";
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #fff;
+  font-size: 9px;
+  pointer-events: none;
+}
+
+.blueprint-editor .block .select-field select {
+  padding: 0 10px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.blueprint-editor .block .number-field input:focus-visible,
+.blueprint-editor .block .text-field input:focus-visible,
+.blueprint-editor .block .select-field select:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
+.blueprint-editor .block__branch {
+  margin: 0 0 0 14px;
+  padding: 0 0 0 12px;
+  gap: 0;
+  border-left: 7px solid var(--kuai-bg, var(--kuai-blue));
+  border-bottom: 7px solid var(--kuai-bg, var(--kuai-blue));
+  border-bottom-left-radius: 8px;
+  background: var(--level-bg-deep);
+}
+
+.blueprint-editor .block__branch--else {
+  border-color: var(--kuai-bg, var(--kuai-pink));
+}
+
+.blueprint-editor .block__branch-label {
+  display: none;
+}
+
+.blueprint-editor .block__branch .block {
+  min-width: 0;
+}
+
+.blueprint-editor .blueprint-start {
+  min-width: 0;
+  min-height: 44px;
+  padding: 7px 12px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 8px;
+  background: var(--kuai-blue);
+  background-image: none;
+  color: #fff;
+  box-shadow: 0 2px 0 var(--kuai-blue-deep);
+  cursor: default;
+}
+
+.blueprint-editor .blueprint-start__dot,
+.blueprint-editor .blueprint-start__spark,
+.blueprint-editor .blueprint-start-lock {
+  display: none;
+}
+
+.blueprint-editor .blueprint-start__text {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.blueprint-editor .blueprint-start::after {
+  border: 0;
+  background: var(--kuai-blue);
+  background-image: none;
+  box-shadow: 0 2px 0 var(--kuai-blue-deep);
+}
+
+.blueprint-editor .palette-block {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  height: 44px;
+  padding: 7px 12px;
+  gap: 5px;
+  border: 0;
+  border-left: 0;
+  border-radius: 8px;
+  background: var(--kuai-palette, var(--kuai-blue));
+  background-image: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 2px 0 var(--kuai-palette-deep, var(--kuai-blue-deep));
+  white-space: nowrap;
+}
+
+.blueprint-editor .palette-block--forward,
+.blueprint-editor .palette-block--turn {
+  --kuai-palette: var(--kuai-blue);
+  --kuai-palette-deep: var(--kuai-blue-deep);
+}
+
+.blueprint-editor .palette-block--repeat {
+  --kuai-palette: var(--kuai-teal);
+  --kuai-palette-deep: var(--kuai-teal-deep);
+}
+
+.blueprint-editor .palette-block--if {
+  --kuai-palette: var(--kuai-pink);
+  --kuai-palette-deep: var(--kuai-pink-deep);
+}
+
+.blueprint-editor .palette-block--setVar,
+.blueprint-editor .palette-block--changeVar {
+  --kuai-palette: var(--kuai-orange);
+  --kuai-palette-deep: var(--kuai-orange-deep);
+}
+
+.blueprint-editor .palette-block__glyph {
+  display: none;
+}
+
+.blueprint-editor .palette-block__label {
+  color: #fff;
+}
+
+.blueprint-editor .palette-block__value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--kuai-field-ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.blueprint-editor .palette-block__suffix {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.blueprint-editor .palette-block__condition {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--kuai-dropdown);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.blueprint-editor .palette-block::before {
+  top: 0;
+  left: 22px;
+  width: 20px;
+  height: 7px;
+  border: 0;
+  border-radius: 0 0 6px 6px;
+  background: var(--level-panel-bottom);
+}
+
+.blueprint-editor .palette-block::after {
+  left: 22px;
+  bottom: -7px;
+  width: 20px;
+  height: 7px;
+  border: 0;
+  border-radius: 0 0 6px 6px;
+  background: var(--kuai-palette, var(--kuai-blue));
+  box-shadow: 0 2px 0 var(--kuai-palette-deep, var(--kuai-blue-deep));
+}
+
+.blueprint-editor .blueprint-scene {
+  position: relative;
+}
+
+.blueprint-editor .blueprint-free-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.blueprint-editor .block--detached {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  width: max-content;
+  max-width: none;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.blueprint-editor .block-drag-ghost--forward,
+.blueprint-editor .block-drag-ghost--turn {
+  --kuai-ghost-bg: var(--kuai-blue);
+  --kuai-ghost-deep: var(--kuai-blue-deep);
+}
+
+.blueprint-editor .block-drag-ghost--repeat {
+  --kuai-ghost-bg: var(--kuai-teal);
+  --kuai-ghost-deep: var(--kuai-teal-deep);
+}
+
+.blueprint-editor .block-drag-ghost--if {
+  --kuai-ghost-bg: var(--kuai-pink);
+  --kuai-ghost-deep: var(--kuai-pink-deep);
+}
+
+.blueprint-editor .block-drag-ghost--setVar,
+.blueprint-editor .block-drag-ghost--changeVar {
+  --kuai-ghost-bg: var(--kuai-orange);
+  --kuai-ghost-deep: var(--kuai-orange-deep);
+}
+
+.blueprint-editor .block-drag-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--kuai-ghost-bg, var(--kuai-blue));
+  box-shadow: 0 2px 0 var(--kuai-ghost-deep, var(--kuai-blue-deep));
+  color: #fff;
+}
+
+.blueprint-editor .block-drag-ghost .block__kind {
+  display: none;
+}
+
+.blueprint-editor .block-drag-ghost__label {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}

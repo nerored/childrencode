@@ -9,7 +9,7 @@ import {
   removeCommand,
 } from "./commandTree";
 import type { BlockAddress, ContainerPath } from "./commandTree";
-import { pickSnap } from "./blockGraph";
+import { pickSnap, socketZone } from "./blockGraph";
 import type { SnapTarget } from "./blockGraph";
 import {
   BLUEPRINT_ZOOM_STEP,
@@ -22,10 +22,19 @@ import {
 } from "./blueprint";
 import type { BlueprintView } from "./blueprint";
 
+export interface DetachedBlock {
+  id: string;
+  command: Command;
+  x: number;
+  y: number;
+}
+
 export interface BlockEditorProps {
   level: LevelSpec;
   program: Command[];
+  detached: DetachedBlock[];
   onChange(program: Command[]): void;
+  onDetachedChange(detached: DetachedBlock[]): void;
 }
 
 interface PaletteEntry {
@@ -96,6 +105,7 @@ function describeCommand(command: Command): string {
  */
 type DragSource =
   | { kind: "block"; address: BlockAddress; command: Command }
+  | { kind: "detached"; id: string; command: Command }
   | { kind: "palette"; command: Command };
 
 interface DragState {
@@ -136,14 +146,15 @@ interface DragApi {
   snapKey: string | null;
   draggingKey: string | null;
   startBlock(
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     address: BlockAddress,
     command: Command,
   ): void;
-  startPalette(event: ReactPointerEvent<HTMLButtonElement>, entry: PaletteEntry): void;
-  move(event: ReactPointerEvent<HTMLButtonElement>): void;
-  end(event: ReactPointerEvent<HTMLButtonElement>): void;
-  cancel(event: ReactPointerEvent<HTMLButtonElement>): void;
+  startPalette(event: ReactPointerEvent<HTMLElement>, entry: PaletteEntry): void;
+  startDetached(event: ReactPointerEvent<HTMLElement>, block: DetachedBlock): void;
+  move(event: ReactPointerEvent<HTMLElement>): void;
+  end(event: ReactPointerEvent<HTMLElement>): void;
+  cancel(event: ReactPointerEvent<HTMLElement>): void;
   consumeSuppressedClick(): boolean;
 }
 
@@ -198,7 +209,13 @@ function collectSockets(root: HTMLElement | null, source: DragSource): SnapSocke
     sockets.push({
       key,
       drop,
-      target: { address: key, edge: "next", x: rect.left, y: rect.top },
+      target: {
+        address: key,
+        edge: "next",
+        x: rect.left,
+        y: rect.top,
+        zone: socketZone(rect),
+      },
     });
   }
   return sockets;
@@ -413,6 +430,49 @@ function NameField({ label, value, onChange }: NameFieldProps) {
   );
 }
 
+function PaletteFields({ command }: { command: Command }) {
+  switch (command.kind) {
+    case "forward":
+      return (
+        <>
+          <span className="palette-block__value">{command.steps}</span>
+          <span className="palette-block__suffix">步</span>
+        </>
+      );
+    case "turn":
+      return null;
+    case "repeat":
+      return (
+        <>
+          <span className="palette-block__value">{command.times}</span>
+          <span className="palette-block__suffix">次</span>
+        </>
+      );
+    case "if":
+      return (
+        <span className="palette-block__condition">
+          {describeCondition(command.condition)}
+        </span>
+      );
+    case "setVar":
+      return (
+        <>
+          <span className="palette-block__value">{command.name}</span>
+          <span className="palette-block__suffix">为</span>
+          <span className="palette-block__value">{command.value}</span>
+        </>
+      );
+    case "changeVar":
+      return (
+        <>
+          <span className="palette-block__value">{command.name}</span>
+          <span className="palette-block__suffix">加</span>
+          <span className="palette-block__value">{command.delta}</span>
+        </>
+      );
+  }
+}
+
 interface BlockPaletteProps {
   entries: PaletteEntry[];
   onAdd(entry: PaletteEntry): void;
@@ -425,35 +485,39 @@ function BlockPalette({ entries, onAdd, drag }: BlockPaletteProps) {
     <div className="block-palette-panel" role="group" aria-label="积木指令栏">
       <div className="block-palette-panel__head">
         <p className="block-palette-panel__title">指令积木</p>
-        <p className="block-palette-panel__hint">拖到画布，或点击追加到末尾</p>
+        <p className="block-palette-panel__hint">拖到画布连接，点击追加；拖回此处删除</p>
       </div>
       <div className="block-palette-panel__list" role="list">
-        {entries.map((entry) => (
-          <button
-            key={entry.key}
-            type="button"
-            role="listitem"
-            className={`palette-block palette-block--${entry.kind}`}
-            data-palette-key={entry.key}
-            draggable={false}
-            onDragStart={(event) => event.preventDefault()}
-            onPointerDown={(event) => drag.startPalette(event, entry)}
-            onPointerMove={drag.move}
-            onPointerUp={drag.end}
-            onPointerCancel={drag.cancel}
-            onClick={() => {
-              if (!drag.consumeSuppressedClick()) {
-                onAdd(entry);
-              }
-            }}
-            aria-label={`添加指令：${entry.label}。也可以拖到画布空位插入。`}
-          >
-            <span className="palette-block__glyph" aria-hidden="true">
-              {entry.glyph}
-            </span>
-            <span className="palette-block__label">{entry.label}</span>
-          </button>
-        ))}
+        {entries.map((entry) => {
+          const preview = entry.create();
+          return (
+            <button
+              key={entry.key}
+              type="button"
+              role="listitem"
+              className={`palette-block palette-block--${entry.kind}`}
+              data-palette-key={entry.key}
+              draggable={false}
+              onDragStart={(event) => event.preventDefault()}
+              onPointerDown={(event) => drag.startPalette(event, entry)}
+              onPointerMove={drag.move}
+              onPointerUp={drag.end}
+              onPointerCancel={drag.cancel}
+              onClick={() => {
+                if (!drag.consumeSuppressedClick()) {
+                  onAdd(entry);
+                }
+              }}
+              aria-label={`添加指令：${entry.label}。也可以拖到画布空位插入。`}
+            >
+              <span className="palette-block__glyph" aria-hidden="true">
+                {entry.glyph}
+              </span>
+              <span className="palette-block__label">{entry.label}</span>
+              <PaletteFields command={preview} />
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -769,6 +833,34 @@ function BlockList({
   );
 }
 
+interface DetachedBlockCardProps {
+  block: DetachedBlock;
+  drag: DragApi;
+  onChange(command: Command): void;
+}
+
+function DetachedBlockCard({ block, drag, onChange }: DetachedBlockCardProps) {
+  return (
+    <article
+      className={`block block--${block.command.kind} block--detached`}
+      style={{ transform: `translate3d(${block.x}px, ${block.y}px, 0)` }}
+      data-detached-id={block.id}
+      aria-label={`未连接指令：${describeCommand(block.command)}；拖到插槽连接，拖回指令栏删除`}
+      onPointerDown={(event) => drag.startDetached(event, block)}
+      onPointerMove={drag.move}
+      onPointerUp={drag.end}
+      onPointerCancel={drag.cancel}
+    >
+      <div className="block__head">
+        <div className="block__content">
+          <CommandFields command={block.command} onChange={onChange} />
+        </div>
+      </div>
+      <span className="block__socket" aria-hidden="true" />
+    </article>
+  );
+}
+
 interface BlockCardProps {
   command: Command;
   address: BlockAddress;
@@ -803,6 +895,10 @@ function BlockCard({
     <article
       className={`block block--${command.kind}${dragging ? " block--dragging" : ""}`}
       aria-label={label}
+      onPointerDown={(event) => drag.startBlock(event, address, command)}
+      onPointerMove={drag.move}
+      onPointerUp={drag.end}
+      onPointerCancel={drag.cancel}
     >
       <div className="block__head">
         <button
@@ -914,7 +1010,13 @@ function BlockCard({
  * nested inside repeat and if bodies. The palette appends or drags new blocks;
  * the canvas pans on empty space and zooms around the pointer.
  */
-export default function BlockEditor({ level, program, onChange }: BlockEditorProps) {
+export default function BlockEditor({
+  level,
+  program,
+  detached,
+  onChange,
+  onDetachedChange,
+}: BlockEditorProps) {
   const allowed = useMemo(() => new Set(level.allowedCommands), [level.allowedCommands]);
   const palette = useMemo(() => paletteFor(allowed), [allowed]);
 
@@ -923,6 +1025,7 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const panRef = useRef<PanSession | null>(null);
   const suppressClickUntilRef = useRef(0);
+  const detachedIdRef = useRef(0);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [view, setView] = useState<BlueprintView>(DEFAULT_BLUEPRINT_VIEW);
   const [panning, setPanning] = useState(false);
@@ -1012,7 +1115,7 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
     return slot;
   };
 
-  /** Nearest visible socket within the magnet radius of the ghost's top-left. */
+  /** Nearest visible socket whose expanded zone contains the drag anchor. */
   const resolveSnap = (
     session: PointerSession,
     x: number,
@@ -1035,7 +1138,7 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
   };
 
   const beginSession = (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     source: DragSource,
     preventDefault: boolean,
   ) => {
@@ -1049,18 +1152,22 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
     if (!(target instanceof Element)) {
       return;
     }
-    if (
-      source.kind === "block" &&
-      target.closest("[data-drag-handle]") === null
-    ) {
-      return;
+    if (source.kind !== "palette") {
+      const control = target.closest(
+        "button, input, select, textarea, a, [data-no-drag]",
+      );
+      if (control !== null && control.closest("[data-drag-handle]") === null) {
+        return;
+      }
     }
     if (preventDefault) {
       event.preventDefault();
     }
     const captureEl = event.currentTarget;
     const sourceEl =
-      source.kind === "block" ? target.closest<HTMLElement>(".block") : captureEl;
+      source.kind === "palette"
+        ? captureEl
+        : target.closest<HTMLElement>(".block");
     const sourceRect = sourceEl?.getBoundingClientRect();
     // Palette chips are 150x46; anchoring the ghost to the chip's top-left
     // pushes the snap corner far from the pointer. Keep palette drags close
@@ -1084,7 +1191,7 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
   };
 
   const startBlock = (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     address: BlockAddress,
     command: Command,
   ) => {
@@ -1092,14 +1199,25 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
   };
 
   const startPalette = (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     entry: PaletteEntry,
   ) => {
     suppressClickUntilRef.current = 0;
     beginSession(event, { kind: "palette", command: entry.create() }, false);
   };
 
-  const handleMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const startDetached = (
+    event: ReactPointerEvent<HTMLElement>,
+    block: DetachedBlock,
+  ) => {
+    beginSession(
+      event,
+      { kind: "detached", id: block.id, command: block.command },
+      true,
+    );
+  };
+
+  const handleMove = (event: ReactPointerEvent<HTMLElement>) => {
     const session = sessionRef.current;
     if (session === null || session.pointerId !== event.pointerId) {
       return;
@@ -1123,13 +1241,19 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
     });
   };
 
-  const handleEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const nextDetachedId = () => {
+    detachedIdRef.current += 1;
+    return `free-${detachedIdRef.current}`;
+  };
+
+  const handleEnd = (event: ReactPointerEvent<HTMLElement>) => {
     const session = sessionRef.current;
     if (session === null || session.pointerId !== event.pointerId) {
       return;
     }
 
     const wasActive = session.active;
+    const source = session.source;
     const snap = wasActive
       ? resolveSnap(session, event.clientX, event.clientY)
       : null;
@@ -1137,36 +1261,116 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
       snap !== null
         ? snap.socket.drop
         : wasActive
-          ? resolveActiveDrop(event.clientX, event.clientY, session.source)
+          ? resolveActiveDrop(event.clientX, event.clientY, source)
           : null;
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    const overPalette =
+      hit instanceof Element && hit.closest(".block-palette-panel") !== null;
+    const viewport = viewportRef.current;
+    const viewportRect = viewport?.getBoundingClientRect();
+    const overViewport =
+      viewportRect !== undefined &&
+      event.clientX >= viewportRect.left &&
+      event.clientX <= viewportRect.right &&
+      event.clientY >= viewportRect.top &&
+      event.clientY <= viewportRect.bottom;
+    const freePosition =
+      viewportRect === undefined
+        ? null
+        : {
+            x:
+              (event.clientX + session.grabOffset.dx - viewportRect.left - view.x) /
+              view.zoom,
+            y:
+              (event.clientY + session.grabOffset.dy - viewportRect.top - view.y) /
+              view.zoom,
+          };
 
     clearSession(session);
 
     if (!wasActive) {
       return;
     }
-    if (session.source.kind === "palette") {
+    if (source.kind === "palette") {
       suppressClickUntilRef.current = performance.now() + 600;
     }
-    if (active === null) {
-      return;
-    }
 
-    if (session.source.kind === "block") {
-      const next = moveCommand(program, session.source.address, active);
+    if (active !== null) {
+      if (source.kind === "block") {
+        const next = moveCommand(program, source.address, active);
+        if (next !== program) {
+          onChange(next);
+        }
+        return;
+      }
+      if (source.kind === "detached") {
+        const next = insertCommand(program, active, source.command);
+        if (next !== program) {
+          onChange(next);
+        }
+        onDetachedChange(detached.filter((item) => item.id !== source.id));
+        return;
+      }
+      const next = insertCommand(program, active, source.command);
       if (next !== program) {
         onChange(next);
       }
       return;
     }
 
-    const next = insertCommand(program, active, session.source.command);
-    if (next !== program) {
-      onChange(next);
+    if (overPalette) {
+      if (source.kind === "block") {
+        const next = removeCommand(program, source.address);
+        if (next !== program) {
+          onChange(next);
+        }
+      } else if (source.kind === "detached") {
+        onDetachedChange(detached.filter((item) => item.id !== source.id));
+      }
+      return;
     }
+
+    if (!overViewport || freePosition === null) {
+      return;
+    }
+
+    if (source.kind === "block") {
+      const next = removeCommand(program, source.address);
+      if (next === program) {
+        return;
+      }
+      onChange(next);
+      onDetachedChange([
+        ...detached,
+        {
+          id: nextDetachedId(),
+          command: source.command,
+          ...freePosition,
+        },
+      ]);
+      return;
+    }
+
+    if (source.kind === "detached") {
+      onDetachedChange(
+        detached.map((item) =>
+          item.id === source.id ? { ...item, ...freePosition } : item,
+        ),
+      );
+      return;
+    }
+
+    onDetachedChange([
+      ...detached,
+      {
+        id: nextDetachedId(),
+        command: source.command,
+        ...freePosition,
+      },
+    ]);
   };
 
-  const handleCancel = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const handleCancel = (event: ReactPointerEvent<HTMLElement>) => {
     const session = sessionRef.current;
     if (session === null || session.pointerId !== event.pointerId) {
       return;
@@ -1294,6 +1498,7 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
         : null,
     startBlock,
     startPalette,
+    startDetached,
     move: handleMove,
     end: handleEnd,
     cancel: handleCancel,
@@ -1306,7 +1511,7 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
     <section
       ref={editorRootRef}
       className={`block-editor blueprint-editor${drag !== null ? " block-editor--dragging" : ""}`}
-      aria-label="积木指令编辑器：拖动积木左侧手柄移动或嵌套，从上方指令栏拖入画布。"
+      aria-label="积木指令编辑器：拖动积木任意位置移动或连接，拖回指令栏删除，从上方指令栏拖入画布。"
     >
       <BlockPalette
         entries={palette}
@@ -1362,6 +1567,23 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
             onRemove={removeAt}
             onMoveToSlot={moveToSlot}
           />
+
+          <div className="blueprint-free-layer">
+            {detached.map((block) => (
+              <DetachedBlockCard
+                key={block.id}
+                block={block}
+                drag={dragApi}
+                onChange={(command) =>
+                  onDetachedChange(
+                    detached.map((item) =>
+                      item.id === block.id ? { ...item, command } : item,
+                    ),
+                  )
+                }
+              />
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1372,7 +1594,7 @@ export default function BlockEditor({ level, program, onChange }: BlockEditorPro
 
       {drag !== null && (
         <div
-          className={`block-drag-ghost${drag.snapKey === null ? "" : " block-drag-ghost--snap"}`}
+          className={`block-drag-ghost block-drag-ghost--${drag.source.command.kind}${drag.snapKey === null ? "" : " block-drag-ghost--snap"}`}
           style={{
             position: "fixed",
             top: 0,

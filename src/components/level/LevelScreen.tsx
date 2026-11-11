@@ -4,7 +4,7 @@ import type { Command, LevelSpec, RunResult, Score } from "../../domain/types";
 import { parseTextProgram } from "../../engine/parse";
 import { scoreRun } from "../../engine/score";
 import { simulate } from "../../engine/simulate";
-import BlockEditor from "./BlockEditor";
+import BlockEditor, { type DetachedBlock } from "./BlockEditor";
 import GridStage from "./GridStage";
 import HintPanel from "./HintPanel";
 import ResultModal from "./ResultModal";
@@ -49,6 +49,7 @@ export default function LevelScreen({
   nextLevelId,
 }: LevelScreenProps) {
   const [program, setProgram] = useState<Command[]>([]);
+  const [detached, setDetached] = useState<DetachedBlock[]>([]);
   const [pythonSource, setPythonSource] = useState<string | null>(null);
   const [parseError, setParseError] = useState<string | undefined>(undefined);
   const [result, setResult] = useState<RunResult | null>(null);
@@ -116,6 +117,7 @@ export default function LevelScreen({
 
   useEffect(() => {
     setProgram([]);
+    setDetached([]);
     setPythonSource(null);
     setParseError(undefined);
     setResult(null);
@@ -186,6 +188,7 @@ export default function LevelScreen({
     }
     cancelPlayback();
     setProgram([]);
+    setDetached([]);
     setPythonSource(null);
     setParseError(undefined);
     setResult(null);
@@ -304,7 +307,13 @@ export default function LevelScreen({
             </header>
 
             {track === "blocks" ? (
-              <BlockEditor level={level} program={program} onChange={setProgram} />
+              <BlockEditor
+                level={level}
+                program={program}
+                detached={detached}
+                onChange={setProgram}
+                onDetachedChange={setDetached}
+              />
             ) : (
               <div className="python-editor">
                 <div className="python-editor__bar">
