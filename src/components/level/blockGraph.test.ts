@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import {
+  chooseSnap,
   pickSnap,
   preferredEdge,
   SNAP_DISTANCE_PX,
   SNAP_ZONE_MARGIN_X,
   SNAP_ZONE_MARGIN_Y,
+  snapTargetDistance,
   socketZone,
 } from "./blockGraph";
 import type { SnapTarget } from "./blockGraph";
@@ -74,4 +76,35 @@ test("the nearest socket point wins when expanded zones overlap", () => {
     { address: "below", edge: "next", x: 100, y: 200, zone: { left: 0, top: 0, right: 600, bottom: 260 } },
   ];
   expect(pickSnap(overlapping, { x: 300, y: 190 })?.address).toBe("below");
+});
+
+test("a zoned socket is measured from its zone centre", () => {
+  const target: SnapTarget<"slot"> = {
+    address: "slot",
+    edge: "next",
+    x: 100,
+    y: 100,
+    zone: { left: 0, top: 60, right: 300, bottom: 140 },
+  };
+  expect(snapTargetDistance(target, 150, 100)).toBe(0);
+});
+
+test("stacked sockets choose the socket under the pointer", () => {
+  const above: SnapTarget<"above" | "below"> = {
+    address: "above",
+    edge: "next",
+    x: 100,
+    y: 100,
+    zone: socketZone({ left: 100, top: 100, right: 310, bottom: 100 }),
+  };
+  const below: SnapTarget<"above" | "below"> = {
+    address: "below",
+    edge: "next",
+    x: 100,
+    y: 156,
+    zone: socketZone({ left: 100, top: 156, right: 310, bottom: 156 }),
+  };
+  const nearest = pickSnap([above, below], { x: 205, y: 156 });
+  expect(nearest?.address).toBe("below");
+  expect(chooseSnap(nearest, above, { x: 205, y: 156 })?.address).toBe("below");
 });

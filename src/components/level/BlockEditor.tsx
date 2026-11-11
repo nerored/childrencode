@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { countCommands } from "../../domain/commands";
 import type { Command, CommandKind, Condition, LevelSpec } from "../../domain/types";
 import {
@@ -10,7 +11,7 @@ import {
   removeCommandTail,
 } from "./commandTree";
 import type { BlockAddress, ContainerPath } from "./commandTree";
-import { pickSnap, socketZone } from "./blockGraph";
+import { chooseSnap, pickSnap, socketZone } from "./blockGraph";
 import type { SnapTarget } from "./blockGraph";
 import {
   BLUEPRINT_ZOOM_STEP,
@@ -47,7 +48,6 @@ interface PaletteEntry {
   create(): Command;
 }
 
-const SNAP_STICKINESS_PX = 14;
 
 const KIND_GLYPH: Record<CommandKind, string> = {
   forward: "→",
@@ -88,9 +88,9 @@ function describeCondition(condition: Condition): string {
 function describeCommand(command: Command): string {
   switch (command.kind) {
     case "forward":
-      return `前进 ${command.steps} 步`;
+      return `移动${command.direction === "backward" ? "后退" : "前进"} ${command.steps} 步`;
     case "turn":
-      return command.direction === "left" ? "左转" : "右转";
+      return `转向（${command.direction === "left" ? "左转" : "右转"}）`;
     case "repeat":
       return `重复 ${command.times} 次`;
     case "if":
@@ -289,30 +289,21 @@ function paletteFor(allowed: Set<CommandKind>): PaletteEntry[] {
 
   if (allowed.has("forward")) {
     entries.push({
-      key: "forward",
+      key: "move",
       kind: "forward",
-      label: "前进",
+      label: "移动",
       glyph: "→",
       create: () => ({ kind: "forward", steps: 1 }),
     });
   }
   if (allowed.has("turn")) {
-    entries.push(
-      {
-        key: "turn-left",
-        kind: "turn",
-        label: "左转",
-        glyph: "↰",
-        create: () => ({ kind: "turn", direction: "left" }),
-      },
-      {
-        key: "turn-right",
-        kind: "turn",
-        label: "右转",
-        glyph: "↱",
-        create: () => ({ kind: "turn", direction: "right" }),
-      },
-    );
+    entries.push({
+      key: "turn",
+      kind: "turn",
+      label: "转向",
+      glyph: "↻",
+      create: () => ({ kind: "turn", direction: "left" }),
+    });
   }
   if (allowed.has("repeat")) {
     entries.push({
@@ -365,6 +356,144 @@ function withElseBranch(command: Extract<Command, { kind: "if" }>, next: Command
   return { kind: "if", condition: command.condition, then: command.then };
 }
 
+interface NumberKeypadProps {
+  label: string;
+  value: string;
+  onDigit(digit: string): void;
+  onBackspace(): void;
+  onClear(): void;
+  onConfirm(): void;
+  onCancel(): void;
+}
+
+const KEYPAD_ROWS = [
+  ["7", "8", "9"],
+  ["4", "5", "6"],
+  ["1", "2", "3"],
+] as const;
+
+function NumberKeypad({
+  label,
+  value,
+  onDigit,
+  onBackspace,
+  onClear,
+  onConfirm,
+  onCancel,
+}: NumberKeypadProps) {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const keepInputFocus = (event: ReactPointerEvent<HTMLElement>) => {
+    event.preventDefault();
+  };
+
+  // The keypad must escape the transformed blueprint scene, but it still needs
+  // the --level-* tokens, which are scoped to .level-screen.
+  const layerRoot =
+    document.querySelector<HTMLElement>(".level-screen") ?? document.body;
+
+  return createPortal(
+    <div
+      className="number-keypad-layer"
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        if (event.target === event.currentTarget) {
+          event.preventDefault();
+          onConfirm();
+        }
+      }}
+    >
+      <section
+        className="number-keypad"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`数字键盘：${label}`}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <header className="number-keypad__head">
+          <div>
+            <p className="number-keypad__eyebrow">数字键盘</p>
+            <h3 className="number-keypad__title">{label}</h3>
+          </div>
+          <button
+            type="button"
+            className="number-keypad__close"
+            onPointerDown={keepInputFocus}
+            onClick={onCancel}
+            aria-label="关闭数字键盘"
+          >
+            ×
+          </button>
+        </header>
+        <output className="number-keypad__display" aria-live="polite">
+          {value.length > 0 ? value : "0"}
+        </output>
+        <div className="number-keypad__grid">
+          {KEYPAD_ROWS.flat().map((digit) => (
+            <button
+              key={digit}
+              type="button"
+              className="number-keypad__key"
+              onPointerDown={keepInputFocus}
+              onClick={() => onDigit(digit)}
+              aria-label={`数字 ${digit}`}
+            >
+              {digit}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="number-keypad__key number-keypad__key--soft"
+            onPointerDown={keepInputFocus}
+            onClick={onClear}
+          >
+            清空
+          </button>
+          <button
+            type="button"
+            className="number-keypad__key"
+            onPointerDown={keepInputFocus}
+            onClick={() => onDigit("0")}
+            aria-label="数字 0"
+          >
+            0
+          </button>
+          <button
+            type="button"
+            className="number-keypad__key number-keypad__key--soft"
+            onPointerDown={keepInputFocus}
+            onClick={onBackspace}
+            aria-label="删除一位"
+          >
+            ⌫
+          </button>
+        </div>
+        <div className="number-keypad__actions">
+          <button
+            type="button"
+            className="number-keypad__action number-keypad__action--cancel"
+            onPointerDown={keepInputFocus}
+            onClick={onCancel}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="number-keypad__action number-keypad__action--confirm"
+            onPointerDown={keepInputFocus}
+            onClick={onConfirm}
+          >
+            确定
+          </button>
+        </div>
+      </section>
+    </div>,
+    layerRoot,
+  );
+}
+
 interface NumberFieldProps {
   label: string;
   value: number;
@@ -376,19 +505,29 @@ interface NumberFieldProps {
 /** Number input that keeps an edit draft and clamps the value on commit. */
 function NumberField({ label, value, min, max, onChange }: NumberFieldProps) {
   const [draft, setDraft] = useState(String(value));
+  const [keypadOpen, setKeypadOpen] = useState(false);
   const skipCommit = useRef(false);
 
   useEffect(() => {
     setDraft(String(value));
   }, [value]);
 
-  const commit = () => {
-    if (skipCommit.current) {
-      skipCommit.current = false;
-      setDraft(String(value));
-      return;
+  useEffect(() => {
+    if (!keypadOpen) {
+      return undefined;
     }
-    const parsed = Number.parseInt(draft, 10);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDraft(String(value));
+        setKeypadOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [keypadOpen, value]);
+
+  const commitValue = (raw: string) => {
+    const parsed = Number.parseInt(raw, 10);
     const next = Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : value;
     setDraft(String(next));
     if (next !== value) {
@@ -396,31 +535,77 @@ function NumberField({ label, value, min, max, onChange }: NumberFieldProps) {
     }
   };
 
+  const commit = () => {
+    if (skipCommit.current) {
+      skipCommit.current = false;
+      setDraft(String(value));
+      return;
+    }
+    commitValue(draft);
+  };
+
+  const closeWithCommit = () => {
+    commitValue(draft);
+    setKeypadOpen(false);
+  };
+
+  const closeWithoutCommit = () => {
+    setDraft(String(value));
+    setKeypadOpen(false);
+  };
+
+  const pressDigit = (digit: string) => {
+    const maxLength = Math.max(1, String(max).length);
+    setDraft((current) => {
+      const next = current === "" || current === "0" ? digit : `${current}${digit}`;
+      return next.slice(0, maxLength);
+    });
+  };
+
   return (
-    <label className="number-field">
-      <span className="number-field__label">{label}</span>
-      <input
-        type="number"
-        inputMode="numeric"
-        min={min}
-        max={max}
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            commit();
+    <>
+      <label className="number-field">
+        <span className="number-field__label">{label}</span>
+        <input
+          type="text"
+          inputMode="none"
+          pattern="[0-9]*"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onFocus={() => setKeypadOpen(true)}
+          onClick={() => setKeypadOpen(true)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commit();
+              setKeypadOpen(false);
+            }
+            if (event.key === "Escape") {
+              skipCommit.current = true;
+              setDraft(String(value));
+              setKeypadOpen(false);
+              event.currentTarget.blur();
+            }
+          }}
+          aria-label={label}
+          aria-haspopup="dialog"
+        />
+      </label>
+      {keypadOpen && (
+        <NumberKeypad
+          label={label}
+          value={draft}
+          onDigit={pressDigit}
+          onBackspace={() =>
+            setDraft((current) => (current.length <= 1 ? "" : current.slice(0, -1)))
           }
-          if (event.key === "Escape") {
-            skipCommit.current = true;
-            setDraft(String(value));
-            event.currentTarget.blur();
-          }
-        }}
-        aria-label={label}
-      />
-    </label>
+          onClear={() => setDraft("0")}
+          onConfirm={closeWithCommit}
+          onCancel={closeWithoutCommit}
+        />
+      )}
+    </>
   );
 }
 
@@ -454,12 +639,15 @@ function PaletteFields({ command }: { command: Command }) {
     case "forward":
       return (
         <>
+          <span className="palette-block__value">
+            {command.direction === "backward" ? "后退" : "前进"}
+          </span>
           <span className="palette-block__value">{command.steps}</span>
           <span className="palette-block__suffix">步</span>
         </>
       );
     case "turn":
-      return null;
+      return <span className="palette-block__value">左转</span>;
     case "repeat":
       return (
         <>
@@ -658,12 +846,29 @@ function CommandFields({ command, onChange }: CommandFieldsProps) {
     case "forward":
       return (
         <>
-          <span className="block__label">前进</span>
+          <span className="block__label">移动</span>
+          <label className="select-field">
+            <span className="select-field__label">方向</span>
+            <select
+              value={command.direction === "backward" ? "backward" : "forward"}
+              onChange={(event) => {
+                const next = event.target.value;
+                const forward = { kind: "forward" as const, steps: command.steps };
+                onChange(
+                  next === "backward" ? { ...forward, direction: "backward" } : forward,
+                );
+              }}
+              aria-label="移动方向"
+            >
+              <option value="forward">前进</option>
+              <option value="backward">后退</option>
+            </select>
+          </label>
           <NumberField
             label="步数"
             value={command.steps}
             min={1}
-            max={9}
+            max={99}
             onChange={(steps) => onChange({ ...command, steps })}
           />
           <span className="block__suffix">步</span>
@@ -672,8 +877,23 @@ function CommandFields({ command, onChange }: CommandFieldsProps) {
     case "turn":
       return (
         <>
-          <span className="block__label">{command.direction === "left" ? "左转" : "右转"}</span>
-          <span className="block__note">原地转向 90°</span>
+          <span className="block__label">转向</span>
+          <label className="select-field">
+            <span className="select-field__label">方向</span>
+            <select
+              value={command.direction}
+              onChange={(event) =>
+                onChange({
+                  ...command,
+                  direction: event.target.value === "right" ? "right" : "left",
+                })
+              }
+              aria-label="转向方向"
+            >
+              <option value="left">左转</option>
+              <option value="right">右转</option>
+            </select>
+          </label>
         </>
       );
     case "repeat":
@@ -1219,33 +1439,22 @@ export default function BlockEditor({
     preferredKey: string | null = null,
   ): SnapSocket | null => {
     const sockets = collectSockets(editorRootRef.current, session.source);
-    const snap = pickSnap(
+    const nearest = pickSnap(
       sockets.map((socket) => socket.target),
       { x, y },
     );
-    if (snap === null) {
+    if (nearest === null) {
       return null;
     }
-    const nearest = sockets.find((candidate) => candidate.key === snap.address);
-    if (nearest === undefined || preferredKey === null || preferredKey === nearest.key) {
-      return nearest ?? null;
+    const preferred =
+      preferredKey === null
+        ? undefined
+        : sockets.find((candidate) => candidate.key === preferredKey)?.target;
+    const chosen = chooseSnap(nearest, preferred, { x, y });
+    if (chosen === null) {
+      return null;
     }
-    const preferred = sockets.find((candidate) => candidate.key === preferredKey);
-    const zone = preferred?.target.zone;
-    if (preferred === undefined || zone === undefined) {
-      return nearest;
-    }
-    if (x < zone.left || x > zone.right || y < zone.top || y > zone.bottom) {
-      return nearest;
-    }
-    const preferredDistance = Math.hypot(
-      x - preferred.target.x,
-      y - preferred.target.y,
-    );
-    if (snap.address !== preferred.target.address && snap.distance < preferredDistance - SNAP_STICKINESS_PX) {
-      return nearest;
-    }
-    return preferred;
+    return sockets.find((candidate) => candidate.key === chosen.address) ?? null;
   };
 
   const beginSession = (
@@ -1762,7 +1971,7 @@ export default function BlockEditor({
             label="程序指令"
             container={[]}
             start
-            emptyHint="从上方拖入第一块积木"
+            emptyHint="从指令栏拖入第一块积木"
             onRemove={removeAt}
             onMoveToSlot={moveToSlot}
           />

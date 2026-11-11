@@ -46,7 +46,7 @@ childrencode/
 
 ## CONVENTIONS
 - Layer direction is one-way: `domain` ← `engine`, `content`, `state` ← `components`/`App`. Only `state/progress.ts` touches `localStorage`; only `components` import `react`/`react-dom`.
-- Tests sit next to sources as `*.test.ts` (never `.tsx`), import from `bun:test`, list 198 cases across 14 files. There is no React/DOM test setup — UI is verified by playing it.
+- Tests sit next to sources as `*.test.ts` (never `.tsx`), import from `bun:test`, list 204 cases across 14 files. There is no React/DOM test setup — UI is verified by playing it.
 - `domain/bun-test.d.ts` is a hand-written shim because `bun-types`/`@types/bun` is intentionally not a dependency; only add matchers there when a test needs one.
 - Class names are BEM (`level-screen__...`, `button--primary`), hand-written in two global sheets; no CSS modules, no CSS-in-JS, no UI library.
 - All user-facing copy is Chinese (zh-CN); identifiers, comments and docs-in-code are English except files under `docs/`.

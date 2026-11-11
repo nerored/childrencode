@@ -27,6 +27,7 @@ export interface LevelScreenProps {
 }
 
 const PYTHON_CHEATSHEET = `coder.forward(2)
+coder.backward(2)
 coder.turnLeft()
 coder.turnRight()
 repeat(3):
@@ -269,9 +270,42 @@ export default function LevelScreen({
         </div>
       </header>
 
-      <div className="level-layout">
+      <div className={`level-layout${track === "blocks" ? " level-layout--blocks" : ""}`}>
         <div className="level-stage-column">
-          <GridStage level={level} frame={currentFrame} />
+          <div className="level-stage-map">
+            <GridStage level={level} frame={currentFrame} />
+            <div className="level-stage-actions" role="group" aria-label="程序操作">
+              <span className="level-stage-actions__par">
+                目标：代码 ≤ {level.parCode} · 步数 ≤ {level.parSteps}
+              </span>
+              <button
+                type="button"
+                className="level-button level-button--run"
+                onClick={handleRun}
+                disabled={playing}
+              >
+                <span aria-hidden="true">▶</span>
+                运行程序
+              </button>
+              <button
+                type="button"
+                className="level-button level-button--ghost"
+                onClick={handleReset}
+                disabled={playing}
+              >
+                重置程序
+              </button>
+              {playing && (
+                <button
+                  type="button"
+                  className="level-button level-button--skip"
+                  onClick={handleSkip}
+                >
+                  跳过播放
+                </button>
+              )}
+            </div>
+          </div>
 
           <div className="level-runbar" role="status" aria-live="polite">
             <span className="level-runbar__item">
@@ -290,31 +324,33 @@ export default function LevelScreen({
             </span>
             <span className={stateClassName}>{stateLabel}</span>
           </div>
+
+          <HintPanel hint={level.hint} tutorial={level.tutorial} />
         </div>
 
-        <div className="level-editor-column">
-          <section className="editor-panel" aria-labelledby="editor-title">
-            <header className="editor-panel__head">
-              <div>
-                <p className="level-eyebrow">{track === "blocks" ? "积木编程" : "Python 编程"}</p>
-                <h2 className="editor-panel__title" id="editor-title">
-                  {track === "blocks" ? "搭建你的程序" : "编写你的程序"}
-                </h2>
-              </div>
-              <span className="editor-panel__badge">
-                {track === "blocks" ? `${program.length} 条顶层指令` : `${pythonLineCount} 行`}
-              </span>
-            </header>
+        <div
+          className={`level-editor-column${track === "blocks" ? " level-editor-column--blocks" : ""}`}
+        >
+          {track === "blocks" ? (
+            <BlockEditor
+              level={level}
+              program={program}
+              detached={detached}
+              onChange={setProgram}
+              onDetachedChange={setDetached}
+            />
+          ) : (
+            <section className="editor-panel" aria-labelledby="editor-title">
+              <header className="editor-panel__head">
+                <div>
+                  <p className="level-eyebrow">Python 编程</p>
+                  <h2 className="editor-panel__title" id="editor-title">
+                    编写你的程序
+                  </h2>
+                </div>
+                <span className="editor-panel__badge">{pythonLineCount} 行</span>
+              </header>
 
-            {track === "blocks" ? (
-              <BlockEditor
-                level={level}
-                program={program}
-                detached={detached}
-                onChange={setProgram}
-                onDetachedChange={setDetached}
-              />
-            ) : (
               <div className="python-editor">
                 <div className="python-editor__bar">
                   <span className="python-editor__filename">main.py</span>
@@ -360,42 +396,8 @@ export default function LevelScreen({
                   </pre>
                 </details>
               </div>
-            )}
-
-            <footer className="editor-panel__actions">
-              <button
-                type="button"
-                className="level-button level-button--run"
-                onClick={handleRun}
-                disabled={playing}
-              >
-                <span aria-hidden="true">▶</span>
-                运行程序
-              </button>
-              <button
-                type="button"
-                className="level-button level-button--ghost"
-                onClick={handleReset}
-                disabled={playing}
-              >
-                重置程序
-              </button>
-              {playing && (
-                <button
-                  type="button"
-                  className="level-button level-button--skip"
-                  onClick={handleSkip}
-                >
-                  跳过播放
-                </button>
-              )}
-              <span className="editor-panel__par">
-                目标：代码 ≤ {level.parCode} · 步数 ≤ {level.parSteps}
-              </span>
-            </footer>
-          </section>
-
-          <HintPanel hint={level.hint} tutorial={level.tutorial} />
+            </section>
+          )}
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import type { Command, Direction } from "../../domain/types";
 export const SNAP_DISTANCE_PX = 44;
 export const SNAP_ZONE_MARGIN_X = 24;
 export const SNAP_ZONE_MARGIN_Y = 88;
+export const SNAP_STICKINESS_PX = 14;
 
 export type GraphEdge = "next" | "body" | "then" | "else";
 export type GraphAddress = string;
@@ -57,6 +58,25 @@ function distanceToZone(zone: SnapZone, x: number, y: number): number {
   return Math.hypot(dx, dy);
 }
 
+/**
+ * Distance used to rank sockets under the pointer.
+ *
+ * A zoned socket is measured from the centre of its zone (the block's centre
+ * line), not from the preview's top-left anchor, so stacked sockets do not
+ * appear equidistant when the pointer sits on the lower one.
+ */
+export function snapTargetDistance(
+  target: SnapTarget<string>,
+  x: number,
+  y: number,
+): number {
+  if (target.zone === undefined) {
+    return Math.hypot(x - target.x, y - target.y);
+  }
+  const centreX = (target.zone.left + target.zone.right) / 2;
+  return Math.hypot(x - centreX, y - target.y);
+}
+
 export function pickSnap<A extends string>(
   targets: readonly SnapTarget<A>[],
   pointer: { x: number; y: number },
@@ -67,7 +87,7 @@ export function pickSnap<A extends string>(
   let bestZoneDistance = Number.POSITIVE_INFINITY;
 
   for (const target of targets) {
-    const pointDistance = Math.hypot(anchorX - target.x, anchorY - target.y);
+    const pointDistance = snapTargetDistance(target, anchorX, anchorY);
     let zoneDistance: number;
 
     if (target.zone === undefined) {
@@ -89,6 +109,42 @@ export function pickSnap<A extends string>(
   }
 
   return best;
+}
+
+/**
+ * Keep the previously hovered socket while the pointer stays in its zone,
+ * unless the nearest socket is meaningfully closer. Rank both with the same
+ * centre-based distance so stacked sockets are compared fairly.
+ */
+export function chooseSnap<A extends string>(
+  nearest: ResolvedSnap<A> | null,
+  preferred: SnapTarget<A> | undefined,
+  pointer: { x: number; y: number },
+  stickiness = SNAP_STICKINESS_PX,
+): ResolvedSnap<A> | null {
+  if (nearest === null) {
+    return null;
+  }
+  if (preferred === undefined || preferred.address === nearest.address) {
+    return nearest;
+  }
+  const zone = preferred.zone;
+  if (zone === undefined) {
+    return nearest;
+  }
+  if (
+    pointer.x < zone.left ||
+    pointer.x > zone.right ||
+    pointer.y < zone.top ||
+    pointer.y > zone.bottom
+  ) {
+    return nearest;
+  }
+  const preferredDistance = snapTargetDistance(preferred, pointer.x, pointer.y);
+  if (nearest.distance < preferredDistance - stickiness) {
+    return nearest;
+  }
+  return { ...preferred, distance: preferredDistance };
 }
 
 export type CommandNode = Command;

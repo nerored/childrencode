@@ -3585,3 +3585,494 @@ button.block__drag-handle:active:not(:disabled) {
   content: none;
   display: none;
 }
+
+.blueprint-editor {
+  --command-block-width: 210px;
+  --command-block-height: 56px;
+  --command-block-pad-x: 14px;
+  --command-block-radius: 10px;
+  --palette-panel-width: 240px;
+  --palette-content-left: 238px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 640px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.blueprint-editor .block {
+  width: var(--command-block-width);
+  min-width: var(--command-block-width);
+  border-radius: var(--command-block-radius);
+  font-size: 15px;
+}
+
+.blueprint-editor .block:has(.block__branch) {
+  width: auto;
+  min-width: var(--command-block-width);
+}
+
+.blueprint-editor .block__head {
+  width: var(--command-block-width);
+  height: var(--command-block-height);
+  min-height: var(--command-block-height);
+  padding: 0 var(--command-block-pad-x);
+  gap: 6px;
+  border-radius: var(--command-block-radius);
+}
+
+.blueprint-editor .block__content {
+  gap: 6px;
+  min-width: 0;
+}
+
+.blueprint-editor .block__label {
+  font-size: 15px;
+}
+
+.blueprint-editor .block__suffix {
+  font-size: 13px;
+}
+
+.blueprint-editor .block .number-field,
+.blueprint-editor .block .text-field,
+.blueprint-editor .block .select-field {
+  min-height: 26px;
+  padding: 2px 8px;
+  font-size: 13px;
+}
+
+.blueprint-editor .block .number-field input,
+.blueprint-editor .block .text-field input {
+  width: 2.2em;
+  min-width: 1.2em;
+  font-size: 13px;
+}
+
+.blueprint-editor .block .text-field input {
+  width: 3.4em;
+}
+
+.blueprint-editor .block .select-field {
+  padding-right: 18px;
+}
+
+.blueprint-editor .block .select-field select {
+  font-size: 13px;
+}
+
+.blueprint-editor .block__branch .block {
+  min-width: var(--command-block-width);
+}
+
+.blueprint-editor .blueprint-scene > .block-list-wrap {
+  min-width: var(--command-block-width);
+}
+
+.blueprint-editor .blueprint-start {
+  width: var(--command-block-width);
+  min-width: var(--command-block-width);
+  min-height: var(--command-block-height);
+  height: var(--command-block-height);
+  padding: 0 var(--command-block-pad-x);
+  border-radius: var(--command-block-radius);
+}
+
+.blueprint-editor .blueprint-start__text {
+  font-size: 15px;
+}
+
+.blueprint-editor .block-palette-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: var(--palette-panel-width);
+  max-height: calc(100% - 92px);
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--level-line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 14px 32px rgba(27, 75, 140, 0.14),
+    inset 0 1px 0 var(--level-highlight);
+  backdrop-filter: blur(14px);
+}
+
+.blueprint-editor .block-palette-panel__head {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.blueprint-editor .block-palette-panel__title {
+  font-size: 12px;
+}
+
+.blueprint-editor .block-palette-panel__hint {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.blueprint-editor .block-palette-panel__list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  margin: 0;
+  padding: 2px 2px 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-snap-type: y proximity;
+  scrollbar-width: none;
+  touch-action: pan-y;
+}
+
+.blueprint-editor .block-palette-panel__list::-webkit-scrollbar {
+  display: none;
+}
+
+.blueprint-editor .palette-block {
+  flex: 0 0 var(--command-block-height);
+  width: var(--command-block-width);
+  height: var(--command-block-height);
+  padding: 0 var(--command-block-pad-x);
+  border-radius: var(--command-block-radius);
+  font-size: 15px;
+  touch-action: none;
+}
+
+.blueprint-editor .palette-block__label {
+  font-size: 15px;
+}
+
+.blueprint-editor .palette-block__value {
+  font-size: 13px;
+}
+
+.blueprint-editor .palette-block__suffix {
+  font-size: 13px;
+}
+
+.blueprint-editor .palette-block__glyph {
+  display: none;
+}
+
+.blueprint-editor .blueprint-toolbar {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 31;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--level-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 24px rgba(27, 75, 140, 0.12);
+  backdrop-filter: blur(12px);
+}
+
+.blueprint-editor .blueprint-viewport {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 560px;
+  border-radius: 18px;
+}
+
+.blueprint-editor .blueprint-scene {
+  padding: 56px 48px 72px var(--palette-content-left);
+}
+
+.blueprint-editor .block-editor__meta {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 25;
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--level-line-faint);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 6px 18px rgba(27, 75, 140, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.level-stage-map {
+  position: relative;
+}
+
+.level-stage-actions {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: min(23rem, calc(100% - 32px));
+  padding: 10px;
+  border: 1px solid var(--level-line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 30px rgba(27, 75, 140, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.level-stage-actions__par {
+  flex: 1 0 100%;
+  color: var(--level-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.level-stage-actions .level-button {
+  flex: 0 0 auto;
+}
+
+@media (min-width: 900px) {
+  .level-layout--blocks {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .level-layout--blocks .level-editor-column--blocks {
+    min-height: 640px;
+    gap: 0;
+  }
+
+  .level-layout--blocks .blueprint-editor {
+    height: 100%;
+  }
+}
+
+@media (max-width: 899px) {
+  .blueprint-editor {
+    min-height: 0;
+  }
+
+  .blueprint-editor .blueprint-viewport {
+    min-height: 420px;
+  }
+
+  .blueprint-editor .blueprint-scene {
+    padding: 32px 28px 64px;
+  }
+
+  .blueprint-editor .block-palette-panel {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 100%;
+    min-height: 0;
+    max-height: none;
+    margin-bottom: 8px;
+  }
+
+  .blueprint-editor .block-palette-panel__list {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 2px 8px;
+    scroll-snap-type: x proximity;
+    touch-action: pan-x;
+  }
+
+  .blueprint-editor .palette-block {
+    flex: 0 0 var(--command-block-width);
+  }
+
+  .blueprint-editor .blueprint-toolbar {
+    position: relative;
+    top: auto;
+    right: auto;
+    align-self: flex-end;
+    margin: 0 0 8px;
+  }
+
+  .blueprint-editor .block-editor__meta {
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .level-layout--blocks .level-editor-column--blocks {
+    min-height: 0;
+  }
+
+  .level-stage-actions {
+    right: 12px;
+    bottom: 12px;
+    width: calc(100% - 24px);
+  }
+
+  /* Reserve room under the legend for the floating run bar. */
+  .level-stage-map .stage {
+    padding-bottom: 7.25rem;
+  }
+}
+
+.number-keypad-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(14, 42, 78, 0.28);
+  backdrop-filter: blur(3px);
+}
+
+.number-keypad {
+  width: min(22rem, 100%);
+  padding: 16px;
+  border: 1px solid var(--level-line);
+  border-radius: 22px;
+  background: var(--level-panel-top);
+  box-shadow: 0 24px 64px rgba(16, 48, 92, 0.24);
+}
+
+.number-keypad__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.number-keypad__eyebrow {
+  margin: 0;
+  color: var(--level-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.number-keypad__title {
+  margin: 2px 0 0;
+  color: var(--level-ink-strong);
+  font-size: 18px;
+}
+
+.number-keypad__close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--level-accent-soft);
+  color: var(--level-accent-strong);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.number-keypad__display {
+  display: block;
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--level-accent-pale, var(--level-accent-soft));
+  color: var(--level-accent-strong);
+  font-size: 34px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1;
+  text-align: right;
+}
+
+.number-keypad__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.number-keypad__key {
+  min-height: 52px;
+  border: 1px solid var(--level-line);
+  border-radius: 13px;
+  background: var(--level-cloud);
+  color: var(--level-ink-strong);
+  font-size: 21px;
+  font-weight: 800;
+  box-shadow: 0 2px 0 var(--level-line-strong);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.number-keypad__key--soft {
+  color: var(--level-muted);
+  font-size: 13px;
+}
+
+.number-keypad__key:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.number-keypad__actions {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.number-keypad__action {
+  min-height: 44px;
+  border: 1px solid var(--level-line);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.number-keypad__action--cancel {
+  background: var(--level-cloud);
+  color: var(--level-muted);
+}
+
+.number-keypad__action--confirm {
+  border-color: var(--level-accent-strong);
+  background: var(--level-accent-strong);
+  color: #fff;
+}
+
+@media (min-width: 1100px) {
+  .blueprint-editor {
+    --palette-content-left: 252px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .level-layout--blocks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 479px) {
+  .number-keypad-layer {
+    padding: 12px;
+  }
+
+  .number-keypad {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .level-stage-actions {
+    padding: 8px;
+  }
+
+  .level-stage-actions .level-button {
+    flex: 1 1 40%;
+  }
+}
