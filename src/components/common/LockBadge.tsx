@@ -20,6 +20,7 @@ export default function LockBadge({
     <span
       className={[
         "lock-badge",
+        "lock-badge--v2",
         compact ? "lock-badge--compact" : "",
         className,
       ]

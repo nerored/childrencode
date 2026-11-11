@@ -6,7 +6,7 @@ interface BrandMarkProps {
 export default function BrandMark({ className }: BrandMarkProps) {
   return (
     <svg
-      className={className}
+      className={["brand-mark", className].filter(Boolean).join(" ")}
       viewBox="0 0 48 48"
       fill="none"
       aria-hidden="true"

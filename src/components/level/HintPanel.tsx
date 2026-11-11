@@ -19,15 +19,13 @@ export default function HintPanel({ hint, tutorial }: HintPanelProps) {
         <span className="hint-panel__icon" aria-hidden="true">
           ?
         </span>
-        <h2 className="hint-panel__title" id="level-hint-title">
-          提示
-        </h2>
+        <h3 className="hint-panel__title" id="level-hint-title">任务提示</h3>
       </div>
       <p className="hint-panel__hint">{hint}</p>
 
       {tutorial.length > 0 && (
         <div className="hint-panel__tutorial">
-          <p className="hint-panel__tutorial-title">引导步骤</p>
+          <p className="hint-panel__tutorial-title">跟着做</p>
           <ol className="hint-panel__steps">
             {tutorial.map((step, index) => (
               <li

@@ -159,12 +159,12 @@ export default function ResultModal({
           >
             下一关
           </button>
-          <button type="button" className="level-button level-button--ghost" onClick={onBack}>
+          <button type="button" className="level-button level-button--ghost result-actions__secondary" onClick={onBack}>
             返回地图
           </button>
           <button
             type="button"
-            className="level-button level-button--ghost"
+            className="level-button level-button--ghost result-actions__secondary"
             onClick={() => setShowReference((current) => !current)}
             disabled={!canShowReference}
             aria-expanded={showReference}

@@ -29,6 +29,8 @@ export default function StarRow({
       className={["star-row", `star-row--${size}`, className].filter(Boolean).join(" ")}
       role="img"
       aria-label={description}
+      data-stars={safeStars}
+      data-max-stars={safeMax}
     >
       {Array.from({ length: safeMax }, (_, index) => (
         <svg

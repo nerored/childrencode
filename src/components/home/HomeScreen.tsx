@@ -4,6 +4,7 @@ import BrandMark from "../common/BrandMark";
 import ProgressBar from "../common/ProgressBar";
 import { summarizeWorld } from "../common/progressMath";
 import type { Track } from "../common/track";
+import homeArchipelago from "../../assets/art/home-archipelago-1600x1100.webp";
 
 interface HomeScreenProps {
   progress: StoredProgress;
@@ -69,11 +70,11 @@ export default function HomeScreen({
             </p>
 
             <h1 className="home-title" id="home-title">
-              Children<span>Code</span>
+              让小车走到终点
             </h1>
-            <p className="home-tagline">在岛屿闯关中学会编程</p>
+            <p className="home-tagline">拖一拖指令，让小车救回企鹅。</p>
             <p className="home-description">
-              从风车原野到雾林岔路，把每一步指令拼成一条路。在四座原创主题岛里理解顺序、循环、变量与判断，让代码成为看得见的行动。
+              从风车原野出发，把每一步指令拼成一条路。用图形化积木或 Python，沿着四座学习小岛发现代码的力量。
             </p>
 
             <fieldset className="track-fieldset">
@@ -107,80 +108,20 @@ export default function HomeScreen({
 
             <div className="home-actions">
               <button type="button" className="button button--primary button--lg" onClick={onStart}>
-                开始闯关
+                {summary.completed > 0 ? "继续：风车小径" : "从风车原野开始"}
                 <span aria-hidden="true">→</span>
               </button>
-              <span className="home-actions__note">
-                4 座主题岛 · {summary.total} 个关卡 · 随时切换轨道
-              </span>
+              <div className="home-next-stop" aria-label="下一站">
+                <span className="home-next-stop__label">下一站</span>
+                <span className="home-next-stop__value">风车原野 · 第1关</span>
+              </div>
             </div>
           </div>
 
           <aside className="home-hero__side" aria-label="学习旅程概览">
-            <section className="orbit-card" aria-labelledby="orbit-title">
-              <div className="orbit-card__head">
-                <h2 className="orbit-card__title" id="orbit-title">
-                  学习航线
-                </h2>
-                <span className="orbit-card__tag">WORLD v{WORLD.version}</span>
-              </div>
-
-              <svg
-                className="orbit-card__map"
-                viewBox="0 0 360 300"
-                role="img"
-                aria-label="四座主题岛连成的学习航线"
-              >
-                <g className="orbit-card__rings" fill="none">
-                  <circle cx="180" cy="150" r="112" />
-                  <circle cx="180" cy="150" r="82" />
-                  <path d="M40 240c54-30 70-84 112-84 46 0 54 54 100 54 34 0 54-16 72-30" />
-                </g>
-
-                <path
-                  className="orbit-card__route"
-                  d="M58 214C84 158 102 122 132 112C176 96 206 82 238 98C270 114 286 156 302 194"
-                  fill="none"
-                />
-
-                <circle className="orbit-card__pulse" cx="180" cy="150" r="64" />
-
-                <g className="orbit-card__nodes">
-                  <g transform="translate(58 214)">
-                    <circle className="orbit-card__node" r="21" />
-                    <text className="orbit-card__node-label" y="4">01</text>
-                  </g>
-                  <g transform="translate(132 112)">
-                    <circle className="orbit-card__node" r="19" />
-                    <text className="orbit-card__node-label" y="4">02</text>
-                  </g>
-                  <g transform="translate(238 98)">
-                    <circle className="orbit-card__node" r="19" />
-                    <text className="orbit-card__node-label" y="4">03</text>
-                  </g>
-                  <g transform="translate(302 194)">
-                    <circle className="orbit-card__node" r="21" />
-                    <text className="orbit-card__node-label" y="4">04</text>
-                  </g>
-                </g>
-
-                <g className="orbit-card__island" transform="translate(180 150)">
-                  <polygon points="0,-45 39,-22.5 39,22.5 0,45 -39,22.5 -39,-22.5" />
-                  <path d="M-18 8c7-5 13-5 20 0 7 5 13 5 20 0" />
-                  <path d="M0-22v18" />
-                  <path d="M-7-11 0-18l7 7" />
-                  <circle cx="0" cy="22" r="2.5" />
-                </g>
-              </svg>
-
-              <div className="orbit-card__legend">
-                {WORLD.scenes.map((scene, index) => (
-                  <span key={scene.id}>
-                    <i className={`orbit-card__dot orbit-card__dot--${scene.id}`} aria-hidden="true" />
-                    {String(index + 1).padStart(2, "0")} {scene.name}
-                  </span>
-                ))}
-              </div>
+            <section className="home-hero__art" aria-label="北极学习群岛插画">
+              <img src={homeArchipelago} alt="风车原野、企鹅和远方学习小岛" />
+              <span className="home-hero__art-caption">四座学习小岛 · 一段代码旅程</span>
             </section>
 
             <section className="progress-panel" aria-labelledby="progress-title">

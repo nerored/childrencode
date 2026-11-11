@@ -232,18 +232,20 @@ export default function LevelScreen({
   return (
     <section className="level-screen" aria-label={`第 ${level.index} 关：${level.title}`}>
       <header className="level-topbar">
-        <button type="button" className="level-button level-button--ghost level-back" onClick={handleBack}>
-          <span aria-hidden="true">←</span>
-          返回地图
-        </button>
+        <div className="level-topbar__row">
+          <button type="button" className="level-button level-button--ghost level-back" onClick={handleBack}>
+            <span aria-hidden="true">←</span>
+            返回地图
+          </button>
+          <p className="level-eyebrow">第 {level.index} 关</p>
+        </div>
 
         <div className="level-topbar__identity">
-          <p className="level-eyebrow">第 {level.index} 关</p>
           <h1 className="level-title">{level.title}</h1>
           <p className="level-brief">{level.brief}</p>
         </div>
 
-        <div className="level-topbar__side">
+        <div className="level-status-row" aria-label="关卡状态">
           <div className="level-track" role="group" aria-label="编程方式">
             <button
               type="button"
@@ -272,38 +274,9 @@ export default function LevelScreen({
 
       <div className={`level-layout${track === "blocks" ? " level-layout--blocks" : ""}`}>
         <div className="level-stage-column">
-          <div className="level-stage-map">
-            <Stage3D level={level} frame={currentFrame} />
-            <div className="level-stage-actions" role="group" aria-label="程序操作">
-              <span className="level-stage-actions__par">
-                目标：代码 ≤ {level.parCode} · 步数 ≤ {level.parSteps}
-              </span>
-              <button
-                type="button"
-                className="level-button level-button--run"
-                onClick={handleRun}
-                disabled={playing}
-              >
-                <span aria-hidden="true">▶</span>
-                运行程序
-              </button>
-              <button
-                type="button"
-                className="level-button level-button--ghost"
-                onClick={handleReset}
-                disabled={playing}
-              >
-                重置程序
-              </button>
-              {playing && (
-                <button
-                  type="button"
-                  className="level-button level-button--skip"
-                  onClick={handleSkip}
-                >
-                  跳过播放
-                </button>
-              )}
+          <div className="level-stage-shell">
+            <div className="level-stage-map">
+              <Stage3D level={level} frame={currentFrame} />
             </div>
           </div>
 
@@ -324,31 +297,39 @@ export default function LevelScreen({
             </span>
             <span className={stateClassName}>{stateLabel}</span>
           </div>
-
-          <HintPanel hint={level.hint} tutorial={level.tutorial} />
         </div>
 
         <div
           className={`level-editor-column${track === "blocks" ? " level-editor-column--blocks" : ""}`}
         >
           {track === "blocks" ? (
-            <BlockEditor
-              level={level}
-              program={program}
-              detached={detached}
-              onChange={setProgram}
-              onDetachedChange={setDetached}
-            />
+            <section className="level-editor-shell" aria-labelledby="editor-title">
+              <header className="level-editor-heading">
+                <div>
+                  <p className="level-eyebrow">指令编排</p>
+                  <h2 className="editor-panel__title" id="editor-title">编排程序</h2>
+                </div>
+                <HintPanel hint={level.hint} tutorial={level.tutorial} />
+              </header>
+              <BlockEditor
+                level={level}
+                program={program}
+                detached={detached}
+                onChange={setProgram}
+                onDetachedChange={setDetached}
+              />
+            </section>
           ) : (
-            <section className="editor-panel" aria-labelledby="editor-title">
-              <header className="editor-panel__head">
+            <section className="level-editor-shell" aria-labelledby="editor-title">
+              <header className="level-editor-heading">
                 <div>
                   <p className="level-eyebrow">Python 编程</p>
-                  <h2 className="editor-panel__title" id="editor-title">
-                    编写你的程序
-                  </h2>
+                  <h2 className="editor-panel__title" id="editor-title">编写你的程序</h2>
                 </div>
-                <span className="editor-panel__badge">{pythonLineCount} 行</span>
+                <div className="level-editor-heading__meta">
+                  <span className="editor-panel__badge">{pythonLineCount} 行</span>
+                  <HintPanel hint={level.hint} tutorial={level.tutorial} />
+                </div>
               </header>
 
               <div className="python-editor">
@@ -399,6 +380,49 @@ export default function LevelScreen({
             </section>
           )}
         </div>
+
+        <section className="level-run-module" role="group" aria-label="程序运行控制">
+          <div className="level-run-module__thresholds">
+            <span>目标</span>
+            <strong>代码 ≤ {level.parCode}</strong>
+            <span>·</span>
+            <strong>步数 ≤ {level.parSteps}</strong>
+          </div>
+          <div className="level-run-module__actions">
+            <button
+              type="button"
+              className="level-button level-button--run"
+              onClick={handleRun}
+              disabled={playing}
+            >
+              <span aria-hidden="true">▶</span>
+              运行程序
+            </button>
+            <button
+              type="button"
+              className="level-button level-button--ghost"
+              onClick={handleReset}
+              disabled={playing}
+            >
+              重置程序
+            </button>
+            {playing && (
+              <button
+                type="button"
+                className="level-button level-button--skip"
+                onClick={handleSkip}
+              >
+                跳过播放
+              </button>
+            )}
+          </div>
+          <div className="level-run-module__metrics">
+            <span>步数 <strong>{stepsDisplay}</strong></span>
+            <span>企鹅 <strong>{collectedCount}/{totalItems}</strong></span>
+            <span>代码 <strong>{score?.codeLength ?? "—"}</strong></span>
+            <span className={stateClassName}>{stateLabel}</span>
+          </div>
+        </section>
       </div>
 
       {resultOpen && result !== null && score !== null && (

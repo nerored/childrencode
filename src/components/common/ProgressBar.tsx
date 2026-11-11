@@ -24,7 +24,11 @@ export default function ProgressBar({
   const accessibleLabel = label ?? "收集进度";
 
   return (
-    <span className={["progress", `progress--${tone}`, className].filter(Boolean).join(" ")}>
+    <span
+      className={["progress", `progress--${tone}`, className].filter(Boolean).join(" ")}
+      data-progress-value={safeValue}
+      data-progress-max={safeMax}
+    >
       {(label !== undefined || showValue) && (
         <span className="progress__head">
           {label !== undefined ? <span className="progress__label">{label}</span> : <span />}

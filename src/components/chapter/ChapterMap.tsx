@@ -14,6 +14,10 @@ import {
   summarizeCheckpoint,
   summarizeWorld,
 } from "../common/progressMath";
+import windmillArt from "../../assets/art/scene-windmill-meadow-1600x900.webp";
+import tideArt from "../../assets/art/scene-tide-coast-1600x900.webp";
+import gearArt from "../../assets/art/scene-gear-workshop-1600x900.webp";
+import mistArt from "../../assets/art/scene-mist-forest-1600x900.webp";
 
 interface ChapterMapProps {
   progress: StoredProgress;
@@ -33,6 +37,12 @@ export default function ChapterMap({
   onOpenLevel,
   onBack,
 }: ChapterMapProps) {
+  const sceneArt: Record<string, string> = {
+    s01: windmillArt,
+    s02: tideArt,
+    s03: gearArt,
+    s04: mistArt,
+  };
   const worldSummary = summarizeWorld(progress, WORLD);
   const chapters = [...scene.chapters].sort((a, b) => a.order - b.order);
   const activeChapter =
@@ -79,18 +89,17 @@ export default function ChapterMap({
       {header}
 
       <main className="page-shell">
-        <section className="page-intro chapter-intro" aria-labelledby="chapter-map-title">
-          <p className="eyebrow">
-            <span className="eyebrow__rule" aria-hidden="true" />
-            CHAPTER MAP · {scene.name}
-          </p>
-          <h1 id="chapter-map-title">
-            {scene.name}
-            <span>·章节地图</span>
-          </h1>
-          <p className="page-intro__lead">
-            {scene.theme}。选择一个章节，沿着四个检查点完成本岛的编程练习。
-          </p>
+        <section className="chapter-banner" aria-labelledby="chapter-map-title">
+          <img src={sceneArt[scene.id]} alt="" />
+          <span className="chapter-banner__veil" aria-hidden="true" />
+          <div className="chapter-banner__copy">
+            <p className="eyebrow">
+              <span className="eyebrow__rule" aria-hidden="true" />
+              CHAPTER MAP · {scene.name}
+            </p>
+            <h1 id="chapter-map-title">{scene.name}·章节地图</h1>
+            <p>{scene.theme}。沿着四个检查点完成本岛的编程练习。</p>
+          </div>
         </section>
 
         <nav className="chapter-tabs" aria-label={`${scene.name}章节`}>

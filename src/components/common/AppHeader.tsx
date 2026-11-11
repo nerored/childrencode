@@ -47,6 +47,7 @@ export default function AppHeader({
         </div>
 
         <div className="header-stats" aria-label="学习进度">
+          <span className="header-stats__eyebrow">旅程进度</span>
           <span className="header-stats__item">
             <span className="header-stats__label">星星</span>
             <strong>
