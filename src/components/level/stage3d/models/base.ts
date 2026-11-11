@@ -2,6 +2,9 @@ import * as THREE from "three";
 import type { StageTheme } from "../theme";
 
 const TAU = Math.PI * 2;
+const BASE_RED = 0xd6453f;
+const BASE_RED_DARK = 0xa9322c;
+const FLAG_RED = 0xe23b32;
 
 function material(color: number, roughness = 0.82, metalness = 0): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness });
@@ -36,7 +39,7 @@ export function buildRescueBase(theme: StageTheme): THREE.Group {
   const root = new THREE.Group();
   root.name = "rescue-base";
 
-  const iglooMaterial = material(theme.igloo, 0.9);
+  const baseRedMaterial = material(BASE_RED_DARK, 0.8);
   const snowMaterial = material(theme.snow, 0.94);
   const doorMaterial = material(theme.iglooDoor, 0.72);
   const glowMaterial = new THREE.MeshStandardMaterial({
@@ -61,6 +64,12 @@ export function buildRescueBase(theme: StageTheme): THREE.Group {
       const angle = phase + (index * TAU) / ring.count;
       const width = (ring.radius * TAU) / ring.count * 0.86;
       const varied = 1 + (((index * 7 + ringIndex * 3) % 5) - 2) * 0.018;
+      const blockColor =
+        ringIndex === 0 && index % 3 === 0
+          ? theme.snow
+          : (index + ringIndex) % 3 === 0
+            ? BASE_RED_DARK
+            : BASE_RED;
       addBlock(
         root,
         ring.radius,
@@ -69,7 +78,7 @@ export function buildRescueBase(theme: StageTheme): THREE.Group {
         width * varied,
         ring.height,
         ring.depth,
-        ringIndex === 0 && index % 3 === 0 ? theme.snow : theme.igloo,
+        blockColor,
       );
     }
   }
@@ -84,7 +93,7 @@ export function buildRescueBase(theme: StageTheme): THREE.Group {
   root.add(cap);
 
   // Tunnel and doorway are deliberately on local +Z (the approach side).
-  const tunnel = mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.25, 10), iglooMaterial);
+  const tunnel = mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.25, 10), baseRedMaterial);
   tunnel.rotation.x = Math.PI / 2;
   tunnel.position.set(0, 0.17, 0.4);
   root.add(tunnel);
@@ -98,26 +107,33 @@ export function buildRescueBase(theme: StageTheme): THREE.Group {
   lintel.position.set(0, 0.34, 0.45);
   root.add(lintel);
 
-  // Small beacon: intentionally no PointLight, so scene lighting remains centralized.
-  const pole = mesh(new THREE.CylinderGeometry(0.014, 0.018, 0.34, 8), metalMaterial);
-  pole.position.set(-0.27, 0.77, 0.02);
+  // Red beacon flag on the dome: a metal pole, a wavy red cloth, and a warm finial.
+  const pole = mesh(new THREE.CylinderGeometry(0.016, 0.022, 0.42, 8), metalMaterial);
+  pole.name = "flag-pole";
+  pole.position.set(0, 0.81, 0);
   root.add(pole);
-  const marker = mesh(new THREE.OctahedronGeometry(0.065, 1), glowMaterial);
-  marker.name = "beacon-marker";
-  marker.position.set(-0.27, 0.96, 0.02);
-  marker.userData.role = "beacon";
-  root.add(marker);
-  const pennant = mesh(new THREE.BufferGeometry(), material(theme.accent, 0.8));
-  const pennantVertices = new Float32Array([
-    -0.27, 0.88, 0.02,
-    -0.27, 0.78, 0.02,
-    -0.08, 0.84, 0.02,
-  ]);
-  pennant.geometry.setAttribute("position", new THREE.BufferAttribute(pennantVertices, 3));
-  pennant.geometry.computeVertexNormals();
-  pennant.geometry.setIndex([0, 1, 2]);
-  pennant.name = "beacon-pennant";
-  root.add(pennant);
+
+  const flagGeometry = new THREE.PlaneGeometry(0.3, 0.18, 6, 3);
+  const flagPosition = flagGeometry.getAttribute("position") as THREE.BufferAttribute;
+  for (let index = 0; index < flagPosition.count; index += 1) {
+    const localX = flagPosition.getX(index);
+    const localY = flagPosition.getY(index);
+    const wave = Math.sin((localX / 0.3 + 0.5) * TAU) * 0.024;
+    flagPosition.setZ(index, wave + (localY / 0.18) * 0.008);
+  }
+  flagGeometry.computeVertexNormals();
+  const flag = mesh(
+    flagGeometry,
+    new THREE.MeshStandardMaterial({ color: FLAG_RED, roughness: 0.58, side: THREE.DoubleSide }),
+  );
+  flag.name = "red-flag";
+  flag.position.set(0.17, 0.91, 0);
+  root.add(flag);
+
+  const finial = mesh(new THREE.OctahedronGeometry(0.05, 1), glowMaterial);
+  finial.name = "flag-finial";
+  finial.position.set(0, 1.03, 0);
+  root.add(finial);
 
   return root;
 }
